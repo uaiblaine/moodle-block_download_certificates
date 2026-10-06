@@ -910,77 +910,100 @@ class block_download_certificates_packager {
         global $DB;
         $dbman = $DB->get_manager();
 
-        $toolcerts = $DB->get_records_sql(
-            "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                    u.middlename, u.alternatename, u.email,
-                    c.fullname as coursename, tc.name as templatename
-             FROM {tool_certificate_issues} tci
-             JOIN {user} u ON u.id = tci.userid
-             LEFT JOIN {course} c ON c.id = tci.courseid
-             LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-             WHERE tci.courseid = ?", [$courseid]
-        );
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $toolcerts = $DB->get_records_sql(
+                    "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, tc.name as templatename
+                     FROM {tool_certificate_issues} tci
+                     JOIN {user} u ON u.id = tci.userid
+                     LEFT JOIN {course} c ON c.id = tci.courseid
+                     LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                     WHERE tci.courseid = ?", [$courseid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $customcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cc.name as certificatename
-                 FROM {customcert_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {customcert} cc ON cc.id = ci.customcertid
-                 LEFT JOIN {course} c ON c.id = cc.course
-                 WHERE cc.course = ?", [$courseid]
-            );
+            try {
+                $customcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cc.name as certificatename
+                     FROM {customcert_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {customcert} cc ON cc.id = ci.customcertid
+                     LEFT JOIN {course} c ON c.id = cc.course
+                     WHERE cc.course = ?", [$courseid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course: customcert query failed: ' . $e->getMessage());
+            }
         }
 
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $modcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cert.name as certificatename
-                 FROM {certificate_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {certificate} cert ON cert.id = ci.certificateid
-                 LEFT JOIN {course} c ON c.id = cert.course
-                 WHERE cert.course = ?", [$courseid]
-            );
+            try {
+                $modcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cert.name as certificatename
+                     FROM {certificate_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {certificate} cert ON cert.id = ci.certificateid
+                     LEFT JOIN {course} c ON c.id = cert.course
+                     WHERE cert.course = ?", [$courseid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $simplecerts = $DB->get_records_sql(
-                "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                        si.timecreated, si.pathnamehash, si.coursename,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename_full
-                 FROM {simplecertificate_issues} si
-                 JOIN {user} u ON u.id = si.userid
-                 LEFT JOIN {course} c ON c.shortname = si.coursename
-                 WHERE c.id = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$courseid]
-            );
+            try {
+                $simplecerts = $DB->get_records_sql(
+                    "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                            si.timecreated, si.pathnamehash, si.coursename,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename_full
+                     FROM {simplecertificate_issues} si
+                     JOIN {user} u ON u.id = si.userid
+                     LEFT JOIN {course} c ON c.shortname = si.coursename
+                     WHERE c.id = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$courseid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $beautifulcerts = $DB->get_records_sql(
-                "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                        cbi.version, cbi.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cb.name as certificatename
-                 FROM {certificatebeautiful_issue} cbi
-                 JOIN {user} u ON u.id = cbi.userid
-                 LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                 LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                 LEFT JOIN {course} c ON c.id = cm.course
-                 WHERE c.id = ?", [$courseid]
-            );
+            try {
+                $beautifulcerts = $DB->get_records_sql(
+                    "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                            cbi.version, cbi.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cb.name as certificatename
+                     FROM {certificatebeautiful_issue} cbi
+                     JOIN {user} u ON u.id = cbi.userid
+                     LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                     LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                     LEFT JOIN {course} c ON c.id = cm.course
+                     WHERE c.id = ?", [$courseid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         return ['tool' => $toolcerts, 'custom' => $customcerts, 'mod' => $modcerts,
@@ -997,77 +1020,100 @@ class block_download_certificates_packager {
         global $DB;
         $dbman = $DB->get_manager();
 
-        $toolcerts = $DB->get_records_sql(
-            "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                    u.middlename, u.alternatename, u.email,
-                    c.fullname as coursename, tc.name as templatename
-             FROM {tool_certificate_issues} tci
-             JOIN {user} u ON u.id = tci.userid
-             LEFT JOIN {course} c ON c.id = tci.courseid
-             LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-             WHERE tci.userid = ?", [$userid]
-        );
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $toolcerts = $DB->get_records_sql(
+                    "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, tc.name as templatename
+                     FROM {tool_certificate_issues} tci
+                     JOIN {user} u ON u.id = tci.userid
+                     LEFT JOIN {course} c ON c.id = tci.courseid
+                     LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                     WHERE tci.userid = ?", [$userid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_user: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $customcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cc.name as certificatename
-                 FROM {customcert_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {customcert} cc ON cc.id = ci.customcertid
-                 LEFT JOIN {course} c ON c.id = cc.course
-                 WHERE ci.userid = ?", [$userid]
-            );
+            try {
+                $customcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cc.name as certificatename
+                     FROM {customcert_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {customcert} cc ON cc.id = ci.customcertid
+                     LEFT JOIN {course} c ON c.id = cc.course
+                     WHERE ci.userid = ?", [$userid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_user: customcert query failed: ' . $e->getMessage());
+            }
         }
 
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $modcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cert.name as certificatename
-                 FROM {certificate_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {certificate} cert ON cert.id = ci.certificateid
-                 LEFT JOIN {course} c ON c.id = cert.course
-                 WHERE ci.userid = ?", [$userid]
-            );
+            try {
+                $modcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cert.name as certificatename
+                     FROM {certificate_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {certificate} cert ON cert.id = ci.certificateid
+                     LEFT JOIN {course} c ON c.id = cert.course
+                     WHERE ci.userid = ?", [$userid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_user: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $simplecerts = $DB->get_records_sql(
-                "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                        si.timecreated, si.pathnamehash, si.coursename,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename_full
-                 FROM {simplecertificate_issues} si
-                 JOIN {user} u ON u.id = si.userid
-                 LEFT JOIN {course} c ON c.shortname = si.coursename
-                 WHERE si.userid = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$userid]
-            );
+            try {
+                $simplecerts = $DB->get_records_sql(
+                    "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                            si.timecreated, si.pathnamehash, si.coursename,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename_full
+                     FROM {simplecertificate_issues} si
+                     JOIN {user} u ON u.id = si.userid
+                     LEFT JOIN {course} c ON c.shortname = si.coursename
+                     WHERE si.userid = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$userid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_user: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $beautifulcerts = $DB->get_records_sql(
-                "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                        cbi.version, cbi.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cb.name as certificatename
-                 FROM {certificatebeautiful_issue} cbi
-                 JOIN {user} u ON u.id = cbi.userid
-                 LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                 LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                 LEFT JOIN {course} c ON c.id = cm.course
-                 WHERE cbi.userid = ?", [$userid]
-            );
+            try {
+                $beautifulcerts = $DB->get_records_sql(
+                    "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                            cbi.version, cbi.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cb.name as certificatename
+                     FROM {certificatebeautiful_issue} cbi
+                     JOIN {user} u ON u.id = cbi.userid
+                     LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                     LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                     LEFT JOIN {course} c ON c.id = cm.course
+                     WHERE cbi.userid = ?", [$userid]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_user: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         return ['tool' => $toolcerts, 'custom' => $customcerts, 'mod' => $modcerts,
@@ -1092,77 +1138,100 @@ class block_download_certificates_packager {
         $userids = array_keys($members);
         list($insql, $inparams) = $DB->get_in_or_equal($userids);
 
-        $toolcerts = $DB->get_records_sql(
-            "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                    u.middlename, u.alternatename, u.email,
-                    c.fullname as coursename, tc.name as templatename
-             FROM {tool_certificate_issues} tci
-             JOIN {user} u ON u.id = tci.userid
-             LEFT JOIN {course} c ON c.id = tci.courseid
-             LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-             WHERE tci.userid $insql", $inparams
-        );
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $toolcerts = $DB->get_records_sql(
+                    "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, tc.name as templatename
+                     FROM {tool_certificate_issues} tci
+                     JOIN {user} u ON u.id = tci.userid
+                     LEFT JOIN {course} c ON c.id = tci.courseid
+                     LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                     WHERE tci.userid $insql", $inparams
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_cohort: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $customcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cc.name as certificatename
-                 FROM {customcert_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {customcert} cc ON cc.id = ci.customcertid
-                 LEFT JOIN {course} c ON c.id = cc.course
-                 WHERE ci.userid $insql", $inparams
-            );
+            try {
+                $customcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cc.name as certificatename
+                     FROM {customcert_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {customcert} cc ON cc.id = ci.customcertid
+                     LEFT JOIN {course} c ON c.id = cc.course
+                     WHERE ci.userid $insql", $inparams
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_cohort: customcert query failed: ' . $e->getMessage());
+            }
         }
 
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $modcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cert.name as certificatename
-                 FROM {certificate_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {certificate} cert ON cert.id = ci.certificateid
-                 LEFT JOIN {course} c ON c.id = cert.course
-                 WHERE ci.userid $insql", $inparams
-            );
+            try {
+                $modcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cert.name as certificatename
+                     FROM {certificate_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {certificate} cert ON cert.id = ci.certificateid
+                     LEFT JOIN {course} c ON c.id = cert.course
+                     WHERE ci.userid $insql", $inparams
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_cohort: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $simplecerts = $DB->get_records_sql(
-                "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                        si.timecreated, si.pathnamehash, si.coursename,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename_full
-                 FROM {simplecertificate_issues} si
-                 JOIN {user} u ON u.id = si.userid
-                 LEFT JOIN {course} c ON c.shortname = si.coursename
-                 WHERE si.userid $insql AND (si.timedeleted IS NULL OR si.timedeleted = 0)", $inparams
-            );
+            try {
+                $simplecerts = $DB->get_records_sql(
+                    "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                            si.timecreated, si.pathnamehash, si.coursename,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename_full
+                     FROM {simplecertificate_issues} si
+                     JOIN {user} u ON u.id = si.userid
+                     LEFT JOIN {course} c ON c.shortname = si.coursename
+                     WHERE si.userid $insql AND (si.timedeleted IS NULL OR si.timedeleted = 0)", $inparams
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_cohort: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $beautifulcerts = $DB->get_records_sql(
-                "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                        cbi.version, cbi.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cb.name as certificatename
-                 FROM {certificatebeautiful_issue} cbi
-                 JOIN {user} u ON u.id = cbi.userid
-                 LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                 LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                 LEFT JOIN {course} c ON c.id = cm.course
-                 WHERE cbi.userid $insql", $inparams
-            );
+            try {
+                $beautifulcerts = $DB->get_records_sql(
+                    "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                            cbi.version, cbi.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cb.name as certificatename
+                     FROM {certificatebeautiful_issue} cbi
+                     JOIN {user} u ON u.id = cbi.userid
+                     LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                     LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                     LEFT JOIN {course} c ON c.id = cm.course
+                     WHERE cbi.userid $insql", $inparams
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_cohort: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         return ['tool' => $toolcerts, 'custom' => $customcerts, 'mod' => $modcerts,
@@ -1180,78 +1249,101 @@ class block_download_certificates_packager {
         global $DB;
         $dbman = $DB->get_manager();
 
-        $toolcerts = $DB->get_records_sql(
-            "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                    u.middlename, u.alternatename, u.email,
-                    c.fullname as coursename, tc.name as templatename
-             FROM {tool_certificate_issues} tci
-             JOIN {user} u ON u.id = tci.userid
-             LEFT JOIN {course} c ON c.id = tci.courseid
-             LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-             WHERE tci.timecreated >= ? AND tci.timecreated <= ?", [$startdate, $enddate]
-        );
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $toolcerts = $DB->get_records_sql(
+                    "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, tc.name as templatename
+                     FROM {tool_certificate_issues} tci
+                     JOIN {user} u ON u.id = tci.userid
+                     LEFT JOIN {course} c ON c.id = tci.courseid
+                     LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                     WHERE tci.timecreated >= ? AND tci.timecreated <= ?", [$startdate, $enddate]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_range: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $customcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cc.name as certificatename
-                 FROM {customcert_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {customcert} cc ON cc.id = ci.customcertid
-                 LEFT JOIN {course} c ON c.id = cc.course
-                 WHERE ci.timecreated >= ? AND ci.timecreated <= ?", [$startdate, $enddate]
-            );
+            try {
+                $customcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cc.name as certificatename
+                     FROM {customcert_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {customcert} cc ON cc.id = ci.customcertid
+                     LEFT JOIN {course} c ON c.id = cc.course
+                     WHERE ci.timecreated >= ? AND ci.timecreated <= ?", [$startdate, $enddate]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_range: customcert query failed: ' . $e->getMessage());
+            }
         }
 
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $modcerts = $DB->get_records_sql(
-                "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cert.name as certificatename
-                 FROM {certificate_issues} ci
-                 JOIN {user} u ON u.id = ci.userid
-                 JOIN {certificate} cert ON cert.id = ci.certificateid
-                 LEFT JOIN {course} c ON c.id = cert.course
-                 WHERE ci.timecreated >= ? AND ci.timecreated <= ?", [$startdate, $enddate]
-            );
+            try {
+                $modcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cert.name as certificatename
+                     FROM {certificate_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {certificate} cert ON cert.id = ci.certificateid
+                     LEFT JOIN {course} c ON c.id = cert.course
+                     WHERE ci.timecreated >= ? AND ci.timecreated <= ?", [$startdate, $enddate]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_range: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $simplecerts = $DB->get_records_sql(
-                "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                        si.timecreated, si.pathnamehash, si.coursename,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename_full
-                 FROM {simplecertificate_issues} si
-                 JOIN {user} u ON u.id = si.userid
-                 LEFT JOIN {course} c ON c.shortname = si.coursename
-                 WHERE si.timecreated >= ? AND si.timecreated <= ?
-                 AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$startdate, $enddate]
-            );
+            try {
+                $simplecerts = $DB->get_records_sql(
+                    "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                            si.timecreated, si.pathnamehash, si.coursename,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename_full
+                     FROM {simplecertificate_issues} si
+                     JOIN {user} u ON u.id = si.userid
+                     LEFT JOIN {course} c ON c.shortname = si.coursename
+                     WHERE si.timecreated >= ? AND si.timecreated <= ?
+                     AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$startdate, $enddate]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_range: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $beautifulcerts = $DB->get_records_sql(
-                "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                        cbi.version, cbi.timecreated,
-                        u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                        u.middlename, u.alternatename, u.email,
-                        c.fullname as coursename, cb.name as certificatename
-                 FROM {certificatebeautiful_issue} cbi
-                 JOIN {user} u ON u.id = cbi.userid
-                 LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                 LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                 LEFT JOIN {course} c ON c.id = cm.course
-                 WHERE cbi.timecreated >= ? AND cbi.timecreated <= ?", [$startdate, $enddate]
-            );
+            try {
+                $beautifulcerts = $DB->get_records_sql(
+                    "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                            cbi.version, cbi.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cb.name as certificatename
+                     FROM {certificatebeautiful_issue} cbi
+                     JOIN {user} u ON u.id = cbi.userid
+                     LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                     LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                     LEFT JOIN {course} c ON c.id = cm.course
+                     WHERE cbi.timecreated >= ? AND cbi.timecreated <= ?", [$startdate, $enddate]
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_range: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         return ['tool' => $toolcerts, 'custom' => $customcerts, 'mod' => $modcerts,
@@ -1259,8 +1351,39 @@ class block_download_certificates_packager {
     }
 
     // =========================================================================
+    // Helper de vérification d'accès.
+    // =========================================================================
+
+    /**
+     * Vérifie que l'utilisateur courant est gestionnaire (block/download_certificates:manage)
+     * ou enseignant dans au moins un cours.
+     *
+     * Utilisé par toutes les méthodes download_single_* qui peuvent être appelées
+     * aussi bien par un gestionnaire que par un enseignant.
+     * La vérification de périmètre (quel user, quel cours) est faite en amont
+     * dans download_precise.php et download_user.php.
+     *
+     * @throws required_capability_exception Si l'utilisateur n'a ni le rôle gestionnaire ni enseignant
+     */
+    private function require_manager_or_teacher(): void {
+        global $USER;
+        $context = context_system::instance();
+        if (has_capability('block/download_certificates:manage', $context)) {
+            return; // Gestionnaire OK.
+        }
+        require_once(__DIR__ . '/certificate_access.php');
+        $access = new block_download_certificates_access();
+        if ($access->is_teacher($USER->id)) {
+            return; // Enseignant OK.
+        }
+        // Ni l'un ni l'autre : on lève l'exception Moodle standard.
+        require_capability('block/download_certificates:manage', $context);
+    }
+
+    // =========================================================================
     // Public batch download methods.
     // =========================================================================
+
 
     /**
      * Download all certificates as ZIP.
@@ -1305,89 +1428,107 @@ class block_download_certificates_packager {
 
         $dbman = $DB->get_manager();
 
-        // tool_certificate.
-        $sql = "SELECT tci.id, tci.userid, tci.templateid, tci.code, tci.emailed,
-                       tci.timecreated, tci.expires, tci.data, tci.component, tci.courseid,
-                       u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                       u.middlename, u.alternatename, u.email,
-                       c.fullname as coursename,
-                       tc.name as templatename
-                FROM {tool_certificate_issues} tci
-                JOIN {user} u ON u.id = tci.userid
-                LEFT JOIN {course} c ON c.id = tci.courseid
-                LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                WHERE tci.timecreated >= ? AND tci.timecreated <= ?
-                ORDER BY tci.timecreated DESC";
-        $toolcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $sql = "SELECT tci.id, tci.userid, tci.templateid, tci.code, tci.emailed,
+                               tci.timecreated, tci.expires, tci.data, tci.component, tci.courseid,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               tc.name as templatename
+                        FROM {tool_certificate_issues} tci
+                        JOIN {user} u ON u.id = tci.userid
+                        LEFT JOIN {course} c ON c.id = tci.courseid
+                        LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                        WHERE tci.timecreated >= ? AND tci.timecreated <= ?
+                        ORDER BY tci.timecreated DESC";
+                $toolcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_date_range: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
-        // customcert.
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cc.name as certificatename
-                    FROM {customcert_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {customcert} cc ON cc.id = ci.customcertid
-                    LEFT JOIN {course} c ON c.id = cc.course
-                    WHERE ci.timecreated >= ? AND ci.timecreated <= ?
-                    ORDER BY ci.timecreated DESC";
-            $customcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cc.name as certificatename
+                        FROM {customcert_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {customcert} cc ON cc.id = ci.customcertid
+                        LEFT JOIN {course} c ON c.id = cc.course
+                        WHERE ci.timecreated >= ? AND ci.timecreated <= ?
+                        ORDER BY ci.timecreated DESC";
+                $customcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_date_range: customcert query failed: ' . $e->getMessage());
+            }
         }
 
-        // mod_certificate.
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cert.name as certificatename
-                    FROM {certificate_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {certificate} cert ON cert.id = ci.certificateid
-                    LEFT JOIN {course} c ON c.id = cert.course
-                    WHERE ci.timecreated >= ? AND ci.timecreated <= ?
-                    ORDER BY ci.timecreated DESC";
-            $modcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cert.name as certificatename
+                        FROM {certificate_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {certificate} cert ON cert.id = ci.certificateid
+                        LEFT JOIN {course} c ON c.id = cert.course
+                        WHERE ci.timecreated >= ? AND ci.timecreated <= ?
+                        ORDER BY ci.timecreated DESC";
+                $modcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_date_range: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // simplecertificate.
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                           si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename_full
-                    FROM {simplecertificate_issues} si
-                    JOIN {user} u ON u.id = si.userid
-                    LEFT JOIN {course} c ON c.shortname = si.coursename
-                    WHERE si.timecreated >= ? AND si.timecreated <= ?
-                    AND (si.timedeleted IS NULL OR si.timedeleted = 0)
-                    ORDER BY si.timecreated DESC";
-            $simplecerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            try {
+                $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                               si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename_full
+                        FROM {simplecertificate_issues} si
+                        JOIN {user} u ON u.id = si.userid
+                        LEFT JOIN {course} c ON c.shortname = si.coursename
+                        WHERE si.timecreated >= ? AND si.timecreated <= ?
+                        AND (si.timedeleted IS NULL OR si.timedeleted = 0)
+                        ORDER BY si.timecreated DESC";
+                $simplecerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_date_range: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // certificatebeautiful.
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                           cbi.version, cbi.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cb.name as certificatename
-                    FROM {certificatebeautiful_issue} cbi
-                    JOIN {user} u ON u.id = cbi.userid
-                    LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                    LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                    LEFT JOIN {course} c ON c.id = cm.course
-                    WHERE cbi.timecreated >= ? AND cbi.timecreated <= ?
-                    ORDER BY cbi.timecreated DESC";
-            $beautifulcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            try {
+                $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                               cbi.version, cbi.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cb.name as certificatename
+                        FROM {certificatebeautiful_issue} cbi
+                        JOIN {user} u ON u.id = cbi.userid
+                        LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                        LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                        LEFT JOIN {course} c ON c.id = cm.course
+                        WHERE cbi.timecreated >= ? AND cbi.timecreated <= ?
+                        ORDER BY cbi.timecreated DESC";
+                $beautifulcerts = $DB->get_records_sql($sql, [$startdate, $enddate]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_date_range: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
@@ -1423,88 +1564,106 @@ class block_download_certificates_packager {
 
         $dbman = $DB->get_manager();
 
-        // tool_certificate.
-        $sql = "SELECT tci.id, tci.userid, tci.templateid, tci.code, tci.emailed,
-                       tci.timecreated, tci.expires, tci.data, tci.component, tci.courseid,
-                       u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                       u.middlename, u.alternatename, u.email,
-                       c.fullname as coursename,
-                       tc.name as templatename
-                FROM {tool_certificate_issues} tci
-                JOIN {user} u ON u.id = tci.userid
-                LEFT JOIN {course} c ON c.id = tci.courseid
-                LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                WHERE tci.courseid = :courseid
-                ORDER BY u.lastname, u.firstname, tci.timecreated";
-        $toolcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $sql = "SELECT tci.id, tci.userid, tci.templateid, tci.code, tci.emailed,
+                               tci.timecreated, tci.expires, tci.data, tci.component, tci.courseid,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               tc.name as templatename
+                        FROM {tool_certificate_issues} tci
+                        JOIN {user} u ON u.id = tci.userid
+                        LEFT JOIN {course} c ON c.id = tci.courseid
+                        LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                        WHERE tci.courseid = :courseid
+                        ORDER BY u.lastname, u.firstname, tci.timecreated";
+                $toolcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_course: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
-        // customcert.
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cc.name as certificatename
-                    FROM {customcert_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {customcert} cc ON cc.id = ci.customcertid
-                    LEFT JOIN {course} c ON c.id = cc.course
-                    WHERE cc.course = :courseid
-                    ORDER BY u.lastname, u.firstname, ci.timecreated";
-            $customcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cc.name as certificatename
+                        FROM {customcert_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {customcert} cc ON cc.id = ci.customcertid
+                        LEFT JOIN {course} c ON c.id = cc.course
+                        WHERE cc.course = :courseid
+                        ORDER BY u.lastname, u.firstname, ci.timecreated";
+                $customcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_course: customcert query failed: ' . $e->getMessage());
+            }
         }
 
-        // mod_certificate.
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cert.name as certificatename
-                    FROM {certificate_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {certificate} cert ON cert.id = ci.certificateid
-                    LEFT JOIN {course} c ON c.id = cert.course
-                    WHERE cert.course = :courseid
-                    ORDER BY u.lastname, u.firstname, ci.timecreated";
-            $modcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cert.name as certificatename
+                        FROM {certificate_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {certificate} cert ON cert.id = ci.certificateid
+                        LEFT JOIN {course} c ON c.id = cert.course
+                        WHERE cert.course = :courseid
+                        ORDER BY u.lastname, u.firstname, ci.timecreated";
+                $modcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_course: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // simplecertificate.
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                           si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename_full
-                    FROM {simplecertificate_issues} si
-                    JOIN {user} u ON u.id = si.userid
-                    LEFT JOIN {course} c ON c.shortname = si.coursename
-                    WHERE c.id = :courseid AND (si.timedeleted IS NULL OR si.timedeleted = 0)
-                    ORDER BY u.lastname, u.firstname, si.timecreated";
-            $simplecerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            try {
+                $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                               si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename_full
+                        FROM {simplecertificate_issues} si
+                        JOIN {user} u ON u.id = si.userid
+                        LEFT JOIN {course} c ON c.shortname = si.coursename
+                        WHERE c.id = :courseid AND (si.timedeleted IS NULL OR si.timedeleted = 0)
+                        ORDER BY u.lastname, u.firstname, si.timecreated";
+                $simplecerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_course: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // certificatebeautiful.
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                           cbi.version, cbi.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cb.name as certificatename
-                    FROM {certificatebeautiful_issue} cbi
-                    JOIN {user} u ON u.id = cbi.userid
-                    LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                    LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                    LEFT JOIN {course} c ON c.id = cm.course
-                    WHERE c.id = :courseid
-                    ORDER BY u.lastname, u.firstname, cbi.timecreated";
-            $beautifulcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            try {
+                $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                               cbi.version, cbi.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cb.name as certificatename
+                        FROM {certificatebeautiful_issue} cbi
+                        JOIN {user} u ON u.id = cbi.userid
+                        LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                        LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                        LEFT JOIN {course} c ON c.id = cm.course
+                        WHERE c.id = :courseid
+                        ORDER BY u.lastname, u.firstname, cbi.timecreated";
+                $beautifulcerts = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+            } catch (Exception $e) {
+                debugging('download_certificates_by_course: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
@@ -1531,88 +1690,111 @@ class block_download_certificates_packager {
 
         if ($userid !== $USER->id) {
             $context = context_system::instance();
-            require_capability('block/download_certificates:manage', $context);
+            // Autoriser les enseignants (la vérification de périmètre est faite dans download_user.php).
+            require_once(__DIR__ . '/certificate_access.php');
+            $access = new block_download_certificates_access();
+            if (!$access->is_teacher($USER->id)) {
+                require_capability('block/download_certificates:manage', $context);
+            }
         }
 
         $dbman = $DB->get_manager();
 
-        // tool_certificate.
-        $sql = "SELECT tci.*, u.firstname, u.lastname, c.fullname as coursename, tc.name as templatename
-                FROM {tool_certificate_issues} tci
-                JOIN {user} u ON u.id = tci.userid
-                LEFT JOIN {course} c ON c.id = tci.courseid
-                LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                WHERE tci.userid = ?
-                ORDER BY tci.timecreated DESC";
-        $toolcerts = $DB->get_records_sql($sql, [$userid]);
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $sql = "SELECT tci.*, u.firstname, u.lastname, c.fullname as coursename, tc.name as templatename
+                        FROM {tool_certificate_issues} tci
+                        JOIN {user} u ON u.id = tci.userid
+                        LEFT JOIN {course} c ON c.id = tci.courseid
+                        LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                        WHERE tci.userid = ?
+                        ORDER BY tci.timecreated DESC";
+                $toolcerts = $DB->get_records_sql($sql, [$userid]);
+            } catch (Exception $e) {
+                debugging('download_user_certificates: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
-        // customcert.
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cc.name as certificatename
-                    FROM {customcert_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {customcert} cc ON cc.id = ci.customcertid
-                    LEFT JOIN {course} c ON c.id = cc.course
-                    WHERE ci.userid = ?
-                    ORDER BY ci.timecreated DESC";
-            $customcerts = $DB->get_records_sql($sql, [$userid]);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cc.name as certificatename
+                        FROM {customcert_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {customcert} cc ON cc.id = ci.customcertid
+                        LEFT JOIN {course} c ON c.id = cc.course
+                        WHERE ci.userid = ?
+                        ORDER BY ci.timecreated DESC";
+                $customcerts = $DB->get_records_sql($sql, [$userid]);
+            } catch (Exception $e) {
+                debugging('download_user_certificates: customcert query failed: ' . $e->getMessage());
+            }
         }
 
-        // mod_certificate.
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cert.name as certificatename
-                    FROM {certificate_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {certificate} cert ON cert.id = ci.certificateid
-                    LEFT JOIN {course} c ON c.id = cert.course
-                    WHERE ci.userid = ?
-                    ORDER BY ci.timecreated DESC";
-            $modcerts = $DB->get_records_sql($sql, [$userid]);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cert.name as certificatename
+                        FROM {certificate_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {certificate} cert ON cert.id = ci.certificateid
+                        LEFT JOIN {course} c ON c.id = cert.course
+                        WHERE ci.userid = ?
+                        ORDER BY ci.timecreated DESC";
+                $modcerts = $DB->get_records_sql($sql, [$userid]);
+            } catch (Exception $e) {
+                debugging('download_user_certificates: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // simplecertificate.
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                           si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename_full
-                    FROM {simplecertificate_issues} si
-                    JOIN {user} u ON u.id = si.userid
-                    LEFT JOIN {course} c ON c.shortname = si.coursename
-                    WHERE si.userid = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)
-                    ORDER BY si.timecreated DESC";
-            $simplecerts = $DB->get_records_sql($sql, [$userid]);
+            try {
+                $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                               si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename_full
+                        FROM {simplecertificate_issues} si
+                        JOIN {user} u ON u.id = si.userid
+                        LEFT JOIN {course} c ON c.shortname = si.coursename
+                        WHERE si.userid = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)
+                        ORDER BY si.timecreated DESC";
+                $simplecerts = $DB->get_records_sql($sql, [$userid]);
+            } catch (Exception $e) {
+                debugging('download_user_certificates: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // certificatebeautiful.
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                           cbi.version, cbi.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cb.name as certificatename
-                    FROM {certificatebeautiful_issue} cbi
-                    JOIN {user} u ON u.id = cbi.userid
-                    LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                    LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                    LEFT JOIN {course} c ON c.id = cm.course
-                    WHERE cbi.userid = ?
-                    ORDER BY cbi.timecreated DESC";
-            $beautifulcerts = $DB->get_records_sql($sql, [$userid]);
+            try {
+                $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                               cbi.version, cbi.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cb.name as certificatename
+                        FROM {certificatebeautiful_issue} cbi
+                        JOIN {user} u ON u.id = cbi.userid
+                        LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                        LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                        LEFT JOIN {course} c ON c.id = cm.course
+                        WHERE cbi.userid = ?
+                        ORDER BY cbi.timecreated DESC";
+                $beautifulcerts = $DB->get_records_sql($sql, [$userid]);
+            } catch (Exception $e) {
+                debugging('download_user_certificates: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
@@ -1658,88 +1840,106 @@ class block_download_certificates_packager {
 
         $dbman = $DB->get_manager();
 
-        // tool_certificate.
-        $sql = "SELECT tci.id, tci.userid, tci.templateid, tci.code, tci.emailed,
-                       tci.timecreated, tci.expires, tci.data, tci.component, tci.courseid,
-                       u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                       u.middlename, u.alternatename, u.email,
-                       c.fullname as coursename,
-                       tc.name as templatename
-                FROM {tool_certificate_issues} tci
-                JOIN {user} u ON u.id = tci.userid
-                LEFT JOIN {course} c ON c.id = tci.courseid
-                LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                WHERE tci.userid $insql
-                ORDER BY u.lastname, u.firstname, tci.timecreated DESC";
-        $toolcerts = $DB->get_records_sql($sql, $params);
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $sql = "SELECT tci.id, tci.userid, tci.templateid, tci.code, tci.emailed,
+                               tci.timecreated, tci.expires, tci.data, tci.component, tci.courseid,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               tc.name as templatename
+                        FROM {tool_certificate_issues} tci
+                        JOIN {user} u ON u.id = tci.userid
+                        LEFT JOIN {course} c ON c.id = tci.courseid
+                        LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                        WHERE tci.userid $insql
+                        ORDER BY u.lastname, u.firstname, tci.timecreated DESC";
+                $toolcerts = $DB->get_records_sql($sql, $params);
+            } catch (Exception $e) {
+                debugging('download_cohort_certificates: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
-        // customcert.
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cc.name as certificatename
-                    FROM {customcert_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {customcert} cc ON cc.id = ci.customcertid
-                    LEFT JOIN {course} c ON c.id = cc.course
-                    WHERE ci.userid $insql
-                    ORDER BY u.lastname, u.firstname, ci.timecreated DESC";
-            $customcerts = $DB->get_records_sql($sql, $params);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cc.name as certificatename
+                        FROM {customcert_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {customcert} cc ON cc.id = ci.customcertid
+                        LEFT JOIN {course} c ON c.id = cc.course
+                        WHERE ci.userid $insql
+                        ORDER BY u.lastname, u.firstname, ci.timecreated DESC";
+                $customcerts = $DB->get_records_sql($sql, $params);
+            } catch (Exception $e) {
+                debugging('download_cohort_certificates: customcert query failed: ' . $e->getMessage());
+            }
         }
 
-        // mod_certificate.
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
-            $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cert.name as certificatename
-                    FROM {certificate_issues} ci
-                    JOIN {user} u ON u.id = ci.userid
-                    JOIN {certificate} cert ON cert.id = ci.certificateid
-                    LEFT JOIN {course} c ON c.id = cert.course
-                    WHERE ci.userid $insql
-                    ORDER BY u.lastname, u.firstname, ci.timecreated DESC";
-            $modcerts = $DB->get_records_sql($sql, $params);
+            try {
+                $sql = "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cert.name as certificatename
+                        FROM {certificate_issues} ci
+                        JOIN {user} u ON u.id = ci.userid
+                        JOIN {certificate} cert ON cert.id = ci.certificateid
+                        LEFT JOIN {course} c ON c.id = cert.course
+                        WHERE ci.userid $insql
+                        ORDER BY u.lastname, u.firstname, ci.timecreated DESC";
+                $modcerts = $DB->get_records_sql($sql, $params);
+            } catch (Exception $e) {
+                debugging('download_cohort_certificates: mod_certificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // simplecertificate.
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
-            $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
-                           si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename_full
-                    FROM {simplecertificate_issues} si
-                    JOIN {user} u ON u.id = si.userid
-                    LEFT JOIN {course} c ON c.shortname = si.coursename
-                    WHERE si.userid $insql AND (si.timedeleted IS NULL OR si.timedeleted = 0)
-                    ORDER BY u.lastname, u.firstname, si.timecreated";
-            $simplecerts = $DB->get_records_sql($sql, $params);
+            try {
+                $sql = "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                               si.timecreated, si.timedeleted, si.haschange, si.pathnamehash, si.coursename,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename_full
+                        FROM {simplecertificate_issues} si
+                        JOIN {user} u ON u.id = si.userid
+                        LEFT JOIN {course} c ON c.shortname = si.coursename
+                        WHERE si.userid $insql AND (si.timedeleted IS NULL OR si.timedeleted = 0)
+                        ORDER BY u.lastname, u.firstname, si.timecreated";
+                $simplecerts = $DB->get_records_sql($sql, $params);
+            } catch (Exception $e) {
+                debugging('download_cohort_certificates: simplecertificate query failed: ' . $e->getMessage());
+            }
         }
 
-        // certificatebeautiful.
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
-            $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
-                           cbi.version, cbi.timecreated,
-                           u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
-                           u.middlename, u.alternatename, u.email,
-                           c.fullname as coursename,
-                           cb.name as certificatename
-                    FROM {certificatebeautiful_issue} cbi
-                    JOIN {user} u ON u.id = cbi.userid
-                    LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
-                    LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
-                    LEFT JOIN {course} c ON c.id = cm.course
-                    WHERE cbi.userid $insql
-                    ORDER BY u.lastname, u.firstname, cbi.timecreated";
-            $beautifulcerts = $DB->get_records_sql($sql, $params);
+            try {
+                $sql = "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                               cbi.version, cbi.timecreated,
+                               u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email,
+                               c.fullname as coursename,
+                               cb.name as certificatename
+                        FROM {certificatebeautiful_issue} cbi
+                        JOIN {user} u ON u.id = cbi.userid
+                        LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                        LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                        LEFT JOIN {course} c ON c.id = cm.course
+                        WHERE cbi.userid $insql
+                        ORDER BY u.lastname, u.firstname, cbi.timecreated";
+                $beautifulcerts = $DB->get_records_sql($sql, $params);
+            } catch (Exception $e) {
+                debugging('download_cohort_certificates: certificatebeautiful query failed: ' . $e->getMessage());
+            }
         }
 
         if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
@@ -1768,21 +1968,27 @@ class block_download_certificates_packager {
     public function download_single_certificate($timecreated, $code) {
         global $DB;
 
-        $context = context_system::instance();
-        require_capability('block/download_certificates:manage', $context);
+        $this->require_manager_or_teacher();
 
-        $sql = "SELECT tci.*, u.firstname, u.lastname, u.email,
-                       tc.name as templatename, c.fullname as coursename
-                FROM {tool_certificate_issues} tci
-                JOIN {user} u ON u.id = tci.userid
-                LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                LEFT JOIN {course} c ON c.id = tci.courseid
-                WHERE tci.timecreated = :timecreated AND tci.code = :code";
-
-        $certificate = $DB->get_record_sql($sql, [
-            'timecreated' => $timecreated,
-            'code' => $code,
-        ]);
+        $dbman = $DB->get_manager();
+        $certificate = null;
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $sql = "SELECT tci.*, u.firstname, u.lastname, u.email,
+                               tc.name as templatename, c.fullname as coursename
+                        FROM {tool_certificate_issues} tci
+                        JOIN {user} u ON u.id = tci.userid
+                        LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                        LEFT JOIN {course} c ON c.id = tci.courseid
+                        WHERE tci.timecreated = :timecreated AND tci.code = :code";
+                $certificate = $DB->get_record_sql($sql, [
+                    'timecreated' => $timecreated,
+                    'code' => $code,
+                ]);
+            } catch (Exception $e) {
+                debugging('download_single_certificate: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
 
         if (!$certificate) {
             throw new moodle_exception('certificatenotfound', 'block_download_certificates');
@@ -1811,8 +2017,7 @@ class block_download_certificates_packager {
     public function download_single_customcert($userid, $certificateid) {
         global $DB;
 
-        $context = context_system::instance();
-        require_capability('block/download_certificates:manage', $context);
+        $this->require_manager_or_teacher();
 
         $issue = $DB->get_record('customcert_issues',
             ['userid' => $userid, 'customcertid' => $certificateid],
@@ -1868,8 +2073,7 @@ class block_download_certificates_packager {
     public function download_single_mod_certificate($userid, $certificateid) {
         global $DB;
 
-        $context = context_system::instance();
-        require_capability('block/download_certificates:manage', $context);
+        $this->require_manager_or_teacher();
 
         $issue = $DB->get_record('certificate_issues',
             ['userid' => $userid, 'certificateid' => $certificateid],
@@ -1920,8 +2124,7 @@ class block_download_certificates_packager {
     public function download_single_simplecertificate($userid, $certificateid, $code) {
         global $DB;
 
-        $context = context_system::instance();
-        require_capability('block/download_certificates:manage', $context);
+        $this->require_manager_or_teacher();
 
         $issue = $DB->get_record('simplecertificate_issues',
             ['userid' => $userid, 'certificateid' => $certificateid, 'code' => $code],
@@ -1987,4 +2190,218 @@ class block_download_certificates_packager {
             throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates');
         }
     }
+
+    // =========================================================================
+    // Méthodes filtrées pour les enseignants.
+    // =========================================================================
+
+    /**
+     * Récupère les certificats d'un cours filtrés sur une liste d'utilisateurs autorisés.
+     *
+     * Variante de fetch_certificates_for_course() restreinte à un sous-ensemble
+     * d'utilisateurs (périmètre de l'enseignant : groupes ou tous les inscrits).
+     *
+     * Sécurité : toutes les valeurs sont passées en paramètres SQL.
+     *
+     * @param int   $courseid       ID du cours
+     * @param int[] $visibleuserids IDs d'étudiants visibles par l'enseignant
+     * @return array ['tool' => [], 'custom' => [], 'mod' => [], 'simple' => [], 'beautiful' => []]
+     */
+    public function fetch_certificates_for_course_teacher(int $courseid, array $visibleuserids): array {
+        global $DB;
+
+        if (empty($visibleuserids)) {
+            return ['tool' => [], 'custom' => [], 'mod' => [], 'simple' => [], 'beautiful' => []];
+        }
+
+        $dbman = $DB->get_manager();
+        list($userinsql, $userinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'uid');
+
+        $toolcerts = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            try {
+                $toolcerts = $DB->get_records_sql(
+                    "SELECT tci.*, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, tc.name as templatename
+                     FROM {tool_certificate_issues} tci
+                     JOIN {user} u ON u.id = tci.userid
+                     LEFT JOIN {course} c ON c.id = tci.courseid
+                     LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                     WHERE tci.courseid = :courseid AND tci.userid {$userinsql}",
+                    array_merge(['courseid' => $courseid], $userinparams)
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course_teacher: tool_certificate query failed: ' . $e->getMessage());
+            }
+        }
+
+        $customcerts = [];
+        if ($dbman->table_exists('customcert_issues')) {
+            try {
+                list($ccuserinsql, $ccuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'ccuid');
+                $customcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cc.name as certificatename
+                     FROM {customcert_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {customcert} cc ON cc.id = ci.customcertid
+                     LEFT JOIN {course} c ON c.id = cc.course
+                     WHERE cc.course = :courseid AND ci.userid {$ccuserinsql}",
+                    array_merge(['courseid' => $courseid], $ccuserinparams)
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course_teacher: customcert query failed: ' . $e->getMessage());
+            }
+        }
+
+        $modcerts = [];
+        if ($dbman->table_exists('certificate_issues')) {
+            try {
+                list($mcuserinsql, $mcuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'mcuid');
+                $modcerts = $DB->get_records_sql(
+                    "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cert.name as certificatename
+                     FROM {certificate_issues} ci
+                     JOIN {user} u ON u.id = ci.userid
+                     JOIN {certificate} cert ON cert.id = ci.certificateid
+                     LEFT JOIN {course} c ON c.id = cert.course
+                     WHERE cert.course = :courseid AND ci.userid {$mcuserinsql}",
+                    array_merge(['courseid' => $courseid], $mcuserinparams)
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course_teacher: mod_certificate query failed: ' . $e->getMessage());
+            }
+        }
+
+        $simplecerts = [];
+        if ($dbman->table_exists('simplecertificate_issues')) {
+            try {
+                list($scuserinsql, $scuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'scuid');
+                $simplecerts = $DB->get_records_sql(
+                    "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
+                            si.timecreated, si.pathnamehash, si.coursename,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename_full
+                     FROM {simplecertificate_issues} si
+                     JOIN {user} u ON u.id = si.userid
+                     LEFT JOIN {course} c ON c.shortname = si.coursename
+                     WHERE c.id = :courseid AND si.userid {$scuserinsql}
+                       AND (si.timedeleted IS NULL OR si.timedeleted = 0)",
+                    array_merge(['courseid' => $courseid], $scuserinparams)
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course_teacher: simplecertificate query failed: ' . $e->getMessage());
+            }
+        }
+
+        $beautifulcerts = [];
+        if ($dbman->table_exists('certificatebeautiful_issue')) {
+            try {
+                list($cbuserinsql, $cbuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'cbuid');
+                $beautifulcerts = $DB->get_records_sql(
+                    "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
+                            cbi.version, cbi.timecreated,
+                            u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                            u.middlename, u.alternatename, u.email,
+                            c.fullname as coursename, cb.name as certificatename
+                     FROM {certificatebeautiful_issue} cbi
+                     JOIN {user} u ON u.id = cbi.userid
+                     LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                     LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                     LEFT JOIN {course} c ON c.id = cm.course
+                     WHERE c.id = :courseid AND cbi.userid {$cbuserinsql}",
+                    array_merge(['courseid' => $courseid], $cbuserinparams)
+                );
+            } catch (Exception $e) {
+                debugging('fetch_certificates_for_course_teacher: certificatebeautiful query failed: ' . $e->getMessage());
+            }
+        }
+
+        return ['tool' => $toolcerts, 'custom' => $customcerts, 'mod' => $modcerts,
+                'simple' => $simplecerts, 'beautiful' => $beautifulcerts];
+    }
+
+    /**
+     * Télécharge les certificats d'un cours filtrés sur le périmètre de l'enseignant.
+     *
+     * Vérifie que :
+     * 1. L'utilisateur courant enseigne dans ce cours.
+     * 2. Les étudiants dans le ZIP sont ceux du périmètre (groupes ou tous inscrits).
+     * 3. Si $groupid est fourni, filtre uniquement les membres de ce groupe.
+     *
+     * @param int      $courseid   ID du cours
+     * @param int      $teacherid  ID de l'enseignant (typiquement $USER->id)
+     * @param int|null $groupid    ID de groupe spécifique, ou null pour tous les groupes du périmètre
+     * @throws moodle_exception Si le cours n'est pas dans le périmètre ou aucun certificat
+     */
+    public function download_certificates_by_course_for_teacher(int $courseid, int $teacherid,
+                                                                 ?int $groupid = null): void {
+        global $DB;
+
+        // Vérification : le cours doit être dans le périmètre de l'enseignant.
+        require_once(__DIR__ . '/certificate_access.php');
+        $access = new block_download_certificates_access();
+        $access->require_teacher_in_course($courseid);
+
+        // Récupération du périmètre de visibilité pour ce cours.
+        $scope = $access->get_teacher_visible_user_ids($teacherid);
+        $visibleuserids = $scope[$courseid] ?? [];
+
+        if (empty($visibleuserids)) {
+            throw new moodle_exception('teacher_no_certificates', 'block_download_certificates');
+        }
+
+        // Si un groupe spécifique est demandé, vérifier qu'il est dans le périmètre
+        // et restreindre la liste aux membres de ce groupe.
+        $groupname = '';
+        if ($groupid) {
+            $group = $DB->get_record('groups', ['id' => $groupid, 'courseid' => $courseid], 'id,name', IGNORE_MISSING);
+            if (!$group) {
+                throw new moodle_exception('invalidgroup', 'block_download_certificates');
+            }
+
+            // Vérifier que l'enseignant a bien accès à ce groupe (intersection).
+            $groupmembers = array_keys(groups_get_members($groupid, 'u.id'));
+            $visibleuserids = array_values(array_intersect($visibleuserids, $groupmembers));
+            $groupname = clean_filename($group->name);
+
+            if (empty($visibleuserids)) {
+                throw new moodle_exception('nocertificatesforcourse', 'block_download_certificates');
+            }
+        }
+
+        $course = $DB->get_record('course', ['id' => $courseid]);
+        if (!$course) {
+            throw new moodle_exception('coursenotfound', 'block_download_certificates');
+        }
+
+        // Fetch des certificats filtrés.
+        $certs = $this->fetch_certificates_for_course_teacher($courseid, $visibleuserids);
+
+        if (empty($certs['tool']) && empty($certs['custom']) && empty($certs['mod']) &&
+            empty($certs['simple']) && empty($certs['beautiful'])) {
+            throw new moodle_exception('nocertificatesforcourse', 'block_download_certificates');
+        }
+
+        $cleancoursename = clean_filename($course->fullname);
+        // Nom du ZIP : inclure le groupe si filtré.
+        if ($groupname) {
+            $zipfilename = "Certificats_{$cleancoursename}_{$groupname}.zip";
+        } else {
+            $zipfilename = "Certificats_{$cleancoursename}.zip";
+        }
+
+        $this->create_and_send_zip(
+            $zipfilename, $certs['tool'], $certs['custom'], $certs['mod'],
+            $certs['simple'], $certs['beautiful'],
+            "teacher course '{$course->fullname}'", 'novalidcertificatesforcourse', true
+        );
+    }
 }
+

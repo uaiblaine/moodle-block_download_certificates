@@ -27,6 +27,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
 
 /**
  * Block download_certificates class.
@@ -106,14 +107,17 @@ class block_download_certificates extends block_base {
         $context = context_system::instance();
 
         try {
-            // Check if user has management capability.
+            // Vérification du niveau d'accès (gestionnaire > enseignant > apprenant).
             $ismanager = has_capability('block/download_certificates:manage', $context);
 
             if ($ismanager) {
-                // Full interface for administrators/managers.
+                // Interface complète pour les gestionnaires/administrateurs.
                 $this->content->text = $this->get_manager_content();
+            } else if ($this->user_is_teacher($USER->id)) {
+                // Interface filtrée pour les enseignants.
+                $this->content->text = $this->get_teacher_content();
             } else {
-                // Simplified interface for learners.
+                // Interface simplifiée pour les apprenants.
                 $this->content->text = $this->get_learner_content();
             }
 
@@ -530,6 +534,72 @@ class block_download_certificates extends block_base {
         }
     }
     
+    /**
+     * Détermine si un utilisateur est enseignant dans au moins un cours.
+     *
+     * Délègue à block_download_certificates_access::is_teacher().
+     *
+     * @param int $userid ID de l'utilisateur
+     * @return bool
+     */
+    private function user_is_teacher(int $userid): bool {
+        $access = new block_download_certificates_access();
+        return $access->is_teacher($userid);
+    }
+
+    /**
+     * Contenu du bloc pour les enseignants.
+     *
+     * Affiche le nombre de certificats dans le périmètre de l'enseignant
+     * et un lien vers la page enseignant (index_teacher.php).
+     *
+     * @return string HTML du contenu du bloc
+     */
+    private function get_teacher_content(): string {
+        global $USER;
+
+        try {
+            $access = new block_download_certificates_access();
+            $scope = $access->get_teacher_visible_user_ids($USER->id);
+            $courseids = array_keys($scope);
+
+            // Compter les certificats dans le périmètre de l'enseignant.
+            require_once($GLOBALS['CFG']->dirroot . '/blocks/download_certificates/classes/certificate_query.php');
+            $query = new block_download_certificates_query();
+            $totalcount = $query->count_search_results_for_teacher($scope);
+
+            $content = '';
+
+            // Affichage du nombre de certificats.
+            $content .= html_writer::start_div('certificate-stats mb-3 text-center');
+            $content .= html_writer::tag('div', $totalcount, ['class' => 'h4 mb-0 text-primary']);
+            $content .= html_writer::tag('small', get_string('teacher_certificates', 'block_download_certificates'),
+                                        ['class' => 'text-muted d-block']);
+            $content .= html_writer::end_div();
+
+
+
+            // Lien vers la page enseignant.
+            $manageurl = new moodle_url('/blocks/download_certificates/index_teacher.php');
+            $content .= html_writer::link(
+                $manageurl,
+                get_string('teacher_panel', 'block_download_certificates'),
+                ['class' => 'btn btn-primary btn-sm d-block mb-2']
+            );
+
+            // Section certificats personnels (comme pour le gestionnaire).
+            $content .= $this->get_manager_personal_section();
+
+            return $content;
+
+        } catch (Exception $e) {
+            return html_writer::div(
+                get_string('error_loading_block', 'block_download_certificates'),
+                'alert alert-danger'
+            );
+        }
+    }
+
     /**
      * Copy any block-specific data when copying to a new block instance.
      * Since this block does not use instance-specific custom tables, 

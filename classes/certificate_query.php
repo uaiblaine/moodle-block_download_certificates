@@ -61,7 +61,12 @@ class block_download_certificates_query {
                 LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
                 ORDER BY tci.timecreated DESC";
 
-        return $DB->get_records_sql($sql);
+        try {
+            return $DB->get_records_sql($sql);
+        } catch (Exception $e) {
+            debugging('get_tool_certificate_issues: query failed: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -88,7 +93,12 @@ class block_download_certificates_query {
                 LEFT JOIN {course} c ON c.id = cc.course
                 ORDER BY ci.timecreated DESC";
 
-        return $DB->get_records_sql($sql);
+        try {
+            return $DB->get_records_sql($sql);
+        } catch (Exception $e) {
+            debugging('get_customcert_issues: query failed: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -115,7 +125,12 @@ class block_download_certificates_query {
                 LEFT JOIN {course} c ON c.id = cert.course
                 ORDER BY ci.timecreated DESC";
 
-        return $DB->get_records_sql($sql);
+        try {
+            return $DB->get_records_sql($sql);
+        } catch (Exception $e) {
+            debugging('get_mod_certificate_issues: query failed: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -141,7 +156,12 @@ class block_download_certificates_query {
                 WHERE si.timedeleted IS NULL OR si.timedeleted = 0
                 ORDER BY si.timecreated DESC";
 
-        return $DB->get_records_sql($sql);
+        try {
+            return $DB->get_records_sql($sql);
+        } catch (Exception $e) {
+            debugging('get_simplecertificate_issues: query failed: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -169,7 +189,12 @@ class block_download_certificates_query {
                 LEFT JOIN {course} c ON c.id = cm.course
                 ORDER BY cbi.timecreated DESC";
 
-        return $DB->get_records_sql($sql);
+        try {
+            return $DB->get_records_sql($sql);
+        } catch (Exception $e) {
+            debugging('get_certificatebeautiful_issues: query failed: ' . $e->getMessage());
+            return [];
+        }
     }
 
     // =========================================================================
@@ -692,16 +717,22 @@ class block_download_certificates_query {
         $unions = [];
         $params = [];
 
+        // Récupérer la collation de la base pour forcer une collation uniforme dans le UNION.
+        // Nécessaire car les tables de certificats (tool_certificate, customcert, etc.)
+        // peuvent avoir des collations différentes (ex: utf8mb3 vs utf8mb4).
+        $collation = $DB->get_dbcollation();
+        $collate = $collation ? " COLLATE {$collation}" : '';
+
         // tool_certificate.
         if ($dbman->table_exists('tool_certificate_issues')) {
             $uniqueid = $DB->sql_concat("'tc_'", 'tci.id');
-            $unions[] = "SELECT {$uniqueid} AS id, tci.id AS original_id, 'tool_certificate' AS cert_type,
+            $unions[] = "SELECT {$uniqueid} AS id, tci.id AS original_id, CAST('tool_certificate' AS CHAR(50)){$collate} AS cert_type,
                                 tci.userid,
                                 u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
                                 u.middlename, u.alternatename, u.email,
-                                COALESCE(c.fullname, '') AS coursename,
-                                COALESCE(tc.name, '') AS templatename,
-                                COALESCE(tci.code, '') AS code,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(tc.name, ''){$collate} AS templatename,
+                                COALESCE(tci.code, ''){$collate} AS code,
                                 tci.timecreated
                          FROM {tool_certificate_issues} tci
                          JOIN {user} u ON u.id = tci.userid
@@ -712,13 +743,13 @@ class block_download_certificates_query {
         // customcert.
         if ($dbman->table_exists('customcert_issues')) {
             $uniqueid = $DB->sql_concat("'cc_'", 'ci.id');
-            $unions[] = "SELECT {$uniqueid} AS id, ci.customcertid AS original_id, 'customcert' AS cert_type,
+            $unions[] = "SELECT {$uniqueid} AS id, ci.customcertid AS original_id, CAST('customcert' AS CHAR(50)){$collate} AS cert_type,
                                 ci.userid,
                                 u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
                                 u.middlename, u.alternatename, u.email,
-                                COALESCE(c.fullname, '') AS coursename,
-                                COALESCE(cc.name, '') AS templatename,
-                                COALESCE(ci.code, '') AS code,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(cc.name, ''){$collate} AS templatename,
+                                COALESCE(ci.code, ''){$collate} AS code,
                                 ci.timecreated
                          FROM {customcert_issues} ci
                          JOIN {user} u ON u.id = ci.userid
@@ -729,13 +760,13 @@ class block_download_certificates_query {
         // mod_certificate.
         if ($dbman->table_exists('certificate_issues')) {
             $uniqueid = $DB->sql_concat("'mc_'", 'ci.id');
-            $unions[] = "SELECT {$uniqueid} AS id, ci.certificateid AS original_id, 'mod_certificate' AS cert_type,
+            $unions[] = "SELECT {$uniqueid} AS id, ci.certificateid AS original_id, CAST('mod_certificate' AS CHAR(50)){$collate} AS cert_type,
                                 ci.userid,
                                 u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
                                 u.middlename, u.alternatename, u.email,
-                                COALESCE(c.fullname, '') AS coursename,
-                                COALESCE(cert.name, '') AS templatename,
-                                COALESCE(ci.code, '') AS code,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(cert.name, ''){$collate} AS templatename,
+                                COALESCE(ci.code, ''){$collate} AS code,
                                 ci.timecreated
                          FROM {certificate_issues} ci
                          JOIN {user} u ON u.id = ci.userid
@@ -746,13 +777,13 @@ class block_download_certificates_query {
         // simplecertificate.
         if ($dbman->table_exists('simplecertificate_issues')) {
             $uniqueid = $DB->sql_concat("'sc_'", 'si.id');
-            $unions[] = "SELECT {$uniqueid} AS id, si.certificateid AS original_id, 'mod_simplecertificate' AS cert_type,
+            $unions[] = "SELECT {$uniqueid} AS id, si.certificateid AS original_id, CAST('mod_simplecertificate' AS CHAR(50)){$collate} AS cert_type,
                                 si.userid,
                                 u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
                                 u.middlename, u.alternatename, u.email,
-                                COALESCE(si.coursename, '') AS coursename,
-                                COALESCE(si.certificatename, '') AS templatename,
-                                COALESCE(si.code, '') AS code,
+                                COALESCE(si.coursename, ''){$collate} AS coursename,
+                                COALESCE(si.certificatename, ''){$collate} AS templatename,
+                                COALESCE(si.code, ''){$collate} AS code,
                                 si.timecreated
                          FROM {simplecertificate_issues} si
                          JOIN {user} u ON u.id = si.userid
@@ -762,13 +793,13 @@ class block_download_certificates_query {
         // certificatebeautiful.
         if ($dbman->table_exists('certificatebeautiful_issue')) {
             $uniqueid = $DB->sql_concat("'cb_'", 'cbi.id');
-            $unions[] = "SELECT {$uniqueid} AS id, cbi.certificatebeautifulid AS original_id, 'mod_certificatebeautiful' AS cert_type,
+            $unions[] = "SELECT {$uniqueid} AS id, cbi.certificatebeautifulid AS original_id, CAST('mod_certificatebeautiful' AS CHAR(50)){$collate} AS cert_type,
                                 cbi.userid,
                                 u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
                                 u.middlename, u.alternatename, u.email,
-                                COALESCE(c.fullname, '') AS coursename,
-                                COALESCE(cb.name, '') AS templatename,
-                                '' AS code,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(cb.name, ''){$collate} AS templatename,
+                                ''{$collate} AS code,
                                 cbi.timecreated
                          FROM {certificatebeautiful_issue} cbi
                          JOIN {user} u ON u.id = cbi.userid
@@ -895,5 +926,494 @@ class block_download_certificates_query {
         }
 
         return $DB->count_records_sql($countsql, $params);
+    }
+
+    // =========================================================================
+    // Méthodes filtrées pour les enseignants.
+    // =========================================================================
+
+    /**
+     * Construit les sous-requêtes UNION filtrées sur un ensemble de cours et d'utilisateurs.
+     *
+     * Variante de build_union_subqueries() restreinte au périmètre de l'enseignant.
+     * Toutes les valeurs sont passées en paramètres SQL (pas de concaténation directe).
+     *
+     * @param int[] $courseids  IDs de cours dans le périmètre de l'enseignant
+     * @param int[] $userids    IDs d'étudiants visibles par l'enseignant
+     * @return array ['unions' => string[], 'params' => array]
+     */
+    /**
+     * Construit les sous-requêtes UNION pour un enseignant en respectant
+     * le périmètre cours par cours (important pour le cloisonnement par groupes).
+     *
+     * Génère des conditions de la forme :
+     *   (courseid = X AND userid IN (u1, u2)) OR (courseid = Y AND userid IN (u1, u2, u3))
+     *
+     * Cela garantit que dans le cours X, seuls u1 et u2 sont visibles même
+     * si u3 est visible dans un autre cours Y.
+     *
+     * @param array $scope Tableau [courseid => [userid, ...]] retourné par certificate_access
+     * @return array ['unions' => string[], 'params' => array]
+     */
+    private function build_union_subqueries_for_teacher(array $scope) {
+        global $DB;
+
+        if (empty($scope)) {
+            return ['unions' => [], 'params' => []];
+        }
+
+        $dbman = $DB->get_manager();
+        $unions = [];
+        $params = [];
+
+        // Forcer une collation uniforme dans le UNION (même logique que build_union_subqueries).
+        $collation = $DB->get_dbcollation();
+        $collate = $collation ? " COLLATE {$collation}" : '';
+
+        // Construire les conditions (course = X AND userid IN (...)) pour chaque cours.
+        $courseconditions = [];
+        $prefixcounter = 0;
+        foreach ($scope as $courseid => $userids) {
+            if (empty($userids)) {
+                continue;
+            }
+            $prefix = 'uid' . ($prefixcounter++);
+            list($uinsql, $uinparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, $prefix);
+            $params = array_merge($params, $uinparams);
+            $ckey = 'cid' . ($prefixcounter - 1);
+            $params[$ckey] = (int) $courseid;
+            $courseconditions[] = "(:{$ckey} AND u.id {$uinsql})";
+        }
+
+        if (empty($courseconditions)) {
+            return ['unions' => [], 'params' => []];
+        }
+
+        // Listes plates pour le filtrage par cours (WHERE c.id IN (...)).
+        $courseids = array_keys($scope);
+        $alluserids = [];
+        foreach ($scope as $uids) {
+            $alluserids = array_merge($alluserids, $uids);
+        }
+        $alluserids = array_unique($alluserids);
+
+        // Clause cours.
+        list($courseinsql, $courseinparams) = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'tcid');
+        $params = array_merge($params, $courseinparams);
+
+        // Clause users (liste plate — le filtrage cours×users est fait par courseconditions sur u.id).
+        list($userinsql, $userinparams) = $DB->get_in_or_equal($alluserids, SQL_PARAMS_NAMED, 'tuid');
+        $params = array_merge($params, $userinparams);
+
+        // Construire la condition combinée course+user.
+        // On génère pour chaque sous-requête : WHERE c.id IN (...) AND u.id IN (...)
+        // PUIS on filtre a posteriori avec courseconditions si besoin.
+        // Méthode plus robuste : on utilise EXISTS ou on génère la condition directement dans le WHERE.
+        //
+        // Pour rester compatible SQL standard on génère :
+        // WHERE (c.id = X1 AND ci.userid IN (u1,u2)) OR (c.id = X2 AND ci.userid IN (u1,u2,u3))
+
+        // Reconstruire les conditions avec le bon alias de colonne pour chaque type de table.
+        // Alias : 'coursecol' = colonne du courseid dans la table, 'usercol' = userid.
+        $buildcond = function(string $coursecolexpr, string $usercolexpr) use ($scope, $DB, &$params) {
+            $parts = [];
+            $pc = count($params); // compteur unique pour les noms de params.
+            foreach ($scope as $courseid => $userids) {
+                if (empty($userids)) continue;
+                $ck = 'bc_c' . $pc;
+                $uk = 'bc_u' . $pc;
+                list($uinsql, $uinparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, $uk);
+                $params[$ck] = (int) $courseid;
+                $params = array_merge($params, $uinparams);
+                $parts[] = "({$coursecolexpr} = :{$ck} AND {$usercolexpr} {$uinsql})";
+                $pc++;
+            }
+            return empty($parts) ? '1=0' : '(' . implode(' OR ', $parts) . ')';
+        };
+
+        // tool_certificate.
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            $cond = $buildcond('tci.courseid', 'tci.userid');
+            $uniqueid = $DB->sql_concat("'tc_'", 'tci.id');
+            $unions[] = "SELECT {$uniqueid} AS id, tci.id AS original_id, CAST('tool_certificate' AS CHAR(50)){$collate} AS cert_type,
+                                tci.userid,
+                                u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                                u.middlename, u.alternatename, u.email,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(tc.name, ''){$collate} AS templatename,
+                                COALESCE(tci.code, ''){$collate} AS code,
+                                tci.timecreated
+                         FROM {tool_certificate_issues} tci
+                         JOIN {user} u ON u.id = tci.userid
+                         LEFT JOIN {course} c ON c.id = tci.courseid
+                         LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
+                         WHERE {$cond}";
+        }
+
+        // customcert.
+        if ($dbman->table_exists('customcert_issues')) {
+            $cond = $buildcond('cc.course', 'ci.userid');
+            $uniqueid = $DB->sql_concat("'cc_'", 'ci.id');
+            $unions[] = "SELECT {$uniqueid} AS id, ci.customcertid AS original_id, CAST('customcert' AS CHAR(50)){$collate} AS cert_type,
+                                ci.userid,
+                                u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                                u.middlename, u.alternatename, u.email,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(cc.name, ''){$collate} AS templatename,
+                                COALESCE(ci.code, ''){$collate} AS code,
+                                ci.timecreated
+                         FROM {customcert_issues} ci
+                         JOIN {user} u ON u.id = ci.userid
+                         JOIN {customcert} cc ON cc.id = ci.customcertid
+                         LEFT JOIN {course} c ON c.id = cc.course
+                         WHERE {$cond}";
+        }
+
+        // mod_certificate.
+        if ($dbman->table_exists('certificate_issues')) {
+            $cond = $buildcond('cert.course', 'ci.userid');
+            $uniqueid = $DB->sql_concat("'mc_'", 'ci.id');
+            $unions[] = "SELECT {$uniqueid} AS id, ci.certificateid AS original_id, CAST('mod_certificate' AS CHAR(50)){$collate} AS cert_type,
+                                ci.userid,
+                                u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                                u.middlename, u.alternatename, u.email,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(cert.name, ''){$collate} AS templatename,
+                                COALESCE(ci.code, ''){$collate} AS code,
+                                ci.timecreated
+                         FROM {certificate_issues} ci
+                         JOIN {user} u ON u.id = ci.userid
+                         JOIN {certificate} cert ON cert.id = ci.certificateid
+                         LEFT JOIN {course} c ON c.id = cert.course
+                         WHERE {$cond}";
+        }
+
+        // simplecertificate — pas de courseid direct, on filtre uniquement par userid.
+        if ($dbman->table_exists('simplecertificate_issues')) {
+            list($scuserinsql, $scuserinparams) = $DB->get_in_or_equal($alluserids, SQL_PARAMS_NAMED, 'scuid');
+            $params = array_merge($params, $scuserinparams);
+            $uniqueid = $DB->sql_concat("'sc_'", 'si.id');
+            $unions[] = "SELECT {$uniqueid} AS id, si.certificateid AS original_id, CAST('mod_simplecertificate' AS CHAR(50)){$collate} AS cert_type,
+                                si.userid,
+                                u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                                u.middlename, u.alternatename, u.email,
+                                COALESCE(si.coursename, ''){$collate} AS coursename,
+                                COALESCE(si.certificatename, ''){$collate} AS templatename,
+                                COALESCE(si.code, ''){$collate} AS code,
+                                si.timecreated
+                         FROM {simplecertificate_issues} si
+                         JOIN {user} u ON u.id = si.userid
+                         WHERE si.userid {$scuserinsql}
+                           AND (si.timedeleted IS NULL OR si.timedeleted = 0)";
+        }
+
+        // certificatebeautiful.
+        if ($dbman->table_exists('certificatebeautiful_issue')) {
+            $cond = $buildcond('cm.course', 'cbi.userid');
+            $uniqueid = $DB->sql_concat("'cb_'", 'cbi.id');
+            $unions[] = "SELECT {$uniqueid} AS id, cbi.certificatebeautifulid AS original_id, CAST('mod_certificatebeautiful' AS CHAR(50)){$collate} AS cert_type,
+                                cbi.userid,
+                                u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                                u.middlename, u.alternatename, u.email,
+                                COALESCE(c.fullname, ''){$collate} AS coursename,
+                                COALESCE(cb.name, ''){$collate} AS templatename,
+                                ''{$collate} AS code,
+                                cbi.timecreated
+                         FROM {certificatebeautiful_issue} cbi
+                         JOIN {user} u ON u.id = cbi.userid
+                         LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
+                         LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
+                         LEFT JOIN {course} c ON c.id = cm.course
+                         WHERE {$cond}";
+        }
+
+        return ['unions' => $unions, 'params' => $params];
+    }
+
+    /**
+     * Recherche paginée de certificats filtrée pour un enseignant.
+     *
+     * Variante de search_all_certificates() restreinte au périmètre de l'enseignant
+     * (cours enseignés + étudiants visibles selon les groupes).
+     *
+     * @param int[]  $courseids IDs de cours dans le périmètre
+     * @param int[]  $userids   IDs d'étudiants visibles
+     * @param string $search    Terme de recherche
+     * @param int    $offset    Décalage pour la pagination
+     * @param int    $limit     Nombre de résultats à retourner
+     * @param string $sort      Colonne de tri
+     * @param string $order     Sens du tri (ASC ou DESC)
+     * @return array Tableau d'objets certificat
+     */
+    public function search_all_certificates_for_teacher(
+        array $scope,
+        string $search = '',
+        int $offset = 0,
+        int $limit = 50,
+        string $sort = 'timecreated',
+        string $order = 'DESC'
+    ): array {
+        global $DB;
+
+        if (empty($scope)) {
+            return [];
+        }
+
+        $subqueries = $this->build_union_subqueries_for_teacher($scope);
+
+        if (empty($subqueries['unions'])) {
+            return [];
+        }
+
+        $basesql = implode(' UNION ALL ', $subqueries['unions']);
+        $params = $subqueries['params'];
+
+        // Appliquer le filtre de recherche textuelle.
+        $sql = $this->apply_search_filter($basesql, $search, $params);
+
+        // Valider la colonne de tri (liste blanche).
+        $allowedsorts = ['timecreated', 'firstname', 'lastname', 'email',
+                         'coursename', 'templatename', 'code', 'cert_type'];
+        if (!in_array($sort, $allowedsorts)) {
+            $sort = 'timecreated';
+        }
+        $order = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
+
+        // Envelopper pour le tri (nécessaire avec UNION).
+        if (strpos($sql, 'allcerts') !== false) {
+            $sql .= " ORDER BY allcerts.{$sort} {$order}";
+        } else {
+            $sql = "SELECT allcerts.* FROM ({$sql}) allcerts ORDER BY allcerts.{$sort} {$order}";
+        }
+
+        return $DB->get_records_sql($sql, $params, $offset, $limit);
+    }
+
+    /**
+     * Compte les résultats de recherche filtrés pour un enseignant.
+     *
+     * @param int[]  $courseids IDs de cours dans le périmètre
+     * @param int[]  $userids   IDs d'étudiants visibles
+     * @param string $search    Terme de recherche
+     * @return int Total des résultats
+     */
+    public function count_search_results_for_teacher(
+        array $scope,
+        string $search = ''
+    ): int {
+        global $DB;
+
+        if (empty($scope)) {
+            return 0;
+        }
+
+        $subqueries = $this->build_union_subqueries_for_teacher($scope);
+
+        if (empty($subqueries['unions'])) {
+            return 0;
+        }
+
+        $basesql = implode(' UNION ALL ', $subqueries['unions']);
+        $params = $subqueries['params'];
+
+        $filteredsql = $this->apply_search_filter($basesql, $search, $params);
+        $countsql = "SELECT COUNT(*) FROM ({$filteredsql}) counted";
+
+        return (int) $DB->count_records_sql($countsql, $params);
+    }
+
+    /**
+     * Retourne la liste des cours avec certificats filtrée pour un enseignant.
+     *
+     * Variante de get_courses_with_certificates() sans require_capability(:manage)
+     * et restreinte aux cours de l'enseignant.
+     *
+     * @param int[] $courseids IDs de cours dans le périmètre de l'enseignant
+     * @return array Tableau de cours avec les compteurs de certificats
+     */
+    public function get_courses_with_certificates_for_teacher(array $scope): array {
+        global $DB;
+
+        if (empty($scope)) {
+            return [];
+        }
+
+        $courseids = array_keys($scope);
+        $dbman = $DB->get_manager();
+
+        // Pour chaque cours, on ne compte que les certificats des utilisateurs
+        // visibles par l'enseignant dans ce cours (respect du cloisonnement par groupes).
+        $allcourses = [];
+
+        foreach ($courseids as $courseid) {
+            $userids = $scope[$courseid] ?? [];
+            if (empty($userids)) {
+                continue;
+            }
+
+            $coursecount = 0;
+
+            // tool_certificate.
+            if ($dbman->table_exists('tool_certificate_issues')) {
+                list($userinql, $userinparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'tu');
+                try {
+                    $sql = "SELECT COUNT(tci.id)
+                            FROM {tool_certificate_issues} tci
+                            WHERE tci.courseid = :tccourseid AND tci.userid {$userinql}";
+                    $coursecount += (int)$DB->count_records_sql($sql,
+                        array_merge(['tccourseid' => $courseid], $userinparams));
+                } catch (Exception $e) {
+                    debugging('get_courses_with_certificates_for_teacher: tool_certificate failed: ' . $e->getMessage());
+                }
+            }
+
+            // customcert.
+            if ($dbman->table_exists('customcert_issues')) {
+                list($userinql, $userinparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'cu');
+                try {
+                    $sql = "SELECT COUNT(ci.id)
+                            FROM {customcert_issues} ci
+                            JOIN {customcert} cc ON cc.id = ci.customcertid
+                            WHERE cc.course = :cccourseid AND ci.userid {$userinql}";
+                    $coursecount += (int)$DB->count_records_sql($sql,
+                        array_merge(['cccourseid' => $courseid], $userinparams));
+                } catch (Exception $e) {
+                    debugging('get_courses_with_certificates_for_teacher: customcert failed: ' . $e->getMessage());
+                }
+            }
+
+            // mod_certificate.
+            if ($dbman->table_exists('certificate_issues')) {
+                list($userinql, $userinparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'mc');
+                try {
+                    $sql = "SELECT COUNT(ci.id)
+                            FROM {certificate_issues} ci
+                            JOIN {certificate} cert ON cert.id = ci.certificateid
+                            WHERE cert.course = :mccourseid AND ci.userid {$userinql}";
+                    $coursecount += (int)$DB->count_records_sql($sql,
+                        array_merge(['mccourseid' => $courseid], $userinparams));
+                } catch (Exception $e) {
+                    debugging('get_courses_with_certificates_for_teacher: mod_certificate failed: ' . $e->getMessage());
+                }
+            }
+
+            if ($coursecount === 0) {
+                continue; // Ne pas inclure les cours sans certificats accessibles.
+            }
+
+            // Récupération du nom du cours.
+            $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname');
+            if (!$course) {
+                continue;
+            }
+
+            $allcourses[$courseid] = [
+                'id'                => $course->id,
+                'fullname'          => format_string($course->fullname, true,
+                                            ['context' => context_system::instance()]),
+                'shortname'         => $course->shortname,
+                'certificate_count' => $coursecount,
+            ];
+        }
+
+        $courselist = array_values($allcourses);
+        usort($courselist, function($a, $b) {
+            return strcmp($a['fullname'], $b['fullname']);
+        });
+
+        return $courselist;
+    }
+
+    /**
+     * Retourne la liste des utilisateurs avec certificats filtrée pour un enseignant.
+     *
+     * Variante de get_users_with_certificates() sans require_capability(:manage)
+     * et restreinte aux utilisateurs visibles par l'enseignant.
+     *
+     * @param int[] $userids IDs d'étudiants visibles par l'enseignant
+     * @return array Tableau d'utilisateurs avec les compteurs de certificats
+     */
+    public function get_users_with_certificates_for_teacher(array $userids): array {
+        global $DB;
+
+        if (empty($userids)) {
+            return [];
+        }
+
+        $dbman = $DB->get_manager();
+
+        // tool_certificate.
+        $toolcertusers = [];
+        if ($dbman->table_exists('tool_certificate_issues')) {
+            list($insql, $inparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'tuid');
+            try {
+                $sql = "SELECT u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email, COUNT(tci.id) as tool_certificate_count
+                        FROM {user} u
+                        INNER JOIN {tool_certificate_issues} tci ON u.id = tci.userid
+                        WHERE u.deleted = 0 AND u.id {$insql}
+                        GROUP BY u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                                 u.middlename, u.alternatename, u.email";
+                $toolcertusers = $DB->get_records_sql($sql, $inparams);
+            } catch (Exception $e) {
+                debugging('get_users_with_certificates_for_teacher: tool_certificate failed: ' . $e->getMessage());
+            }
+        }
+
+        // customcert.
+        $customcertusers = [];
+        if ($dbman->table_exists('customcert_issues')) {
+            list($insql, $inparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'ccuid');
+            try {
+                $sql = "SELECT u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                               u.middlename, u.alternatename, u.email, COUNT(ci.id) as customcert_count
+                        FROM {user} u
+                        INNER JOIN {customcert_issues} ci ON u.id = ci.userid
+                        WHERE u.deleted = 0 AND u.id {$insql}
+                        GROUP BY u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                                 u.middlename, u.alternatename, u.email";
+                $customcertusers = $DB->get_records_sql($sql, $inparams);
+            } catch (Exception $e) {
+                debugging('get_users_with_certificates_for_teacher: customcert failed: ' . $e->getMessage());
+            }
+        }
+
+        // Fusionner les résultats.
+        $allusers = [];
+        $usertypes = [
+            'tool_certificate_count' => $toolcertusers,
+            'customcert_count'       => $customcertusers,
+        ];
+
+        foreach ($usertypes as $countkey => $users) {
+            foreach ($users as $user) {
+                if (!isset($allusers[$user->id])) {
+                    $allusers[$user->id] = [
+                        'id'                     => $user->id,
+                        'firstname'              => $user->firstname,
+                        'lastname'               => $user->lastname,
+                        'fullname'               => fullname($user),
+                        'email'                  => $user->email,
+                        'tool_certificate_count' => 0,
+                        'customcert_count'       => 0,
+                        'certificate_count'      => 0,
+                    ];
+                }
+                $allusers[$user->id][$countkey] = $user->$countkey;
+            }
+        }
+
+        $userlist = [];
+        foreach ($allusers as $user) {
+            $totalcount = $user['tool_certificate_count'] + $user['customcert_count'];
+            $user['certificate_count'] = $totalcount;
+            $userlist[] = $user;
+        }
+
+        usort($userlist, function($a, $b) {
+            return strcmp($a['fullname'], $b['fullname']);
+        });
+
+        return $userlist;
     }
 }

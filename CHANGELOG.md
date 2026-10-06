@@ -1,98 +1,108 @@
+## [2026052800] - 2026-05-28
+
+### Changed
+
+- **Gestion de collation uniforme dans certificate_query.php** : Ajout de la récupération de collation via `$DB->get_dbcollation()` dans les méthodes `build_union_subqueries()` et `build_union_subqueries_for_teacher_scope()`. Application systématique de `COLLATE {$collation}` sur toutes les colonnes texte des requêtes UNION (`cert_type`, `coursename`, `templatename`, `code`). Cast explicite des littéraux avec `CAST('tool_certificate' AS CHAR(50)) COLLATE ...` pour tous les types de certificats (tool_certificate, customcert, mod_certificate, mod_simplecertificate, mod_certificatebeautiful).
+
+- **Prévention des erreurs "Illegal mix of collations"** : Cette modification résout les incompatibilités de collation entre tables de certificats (ex: utf8mb3 vs utf8mb4) fréquentes lors de migrations de base de données ou d'installations hétérogènes de plugins de certification.
+
+## [2026052800] - 2026-05-28
+
+### Changed
+
+- **Gestion d'erreurs SQL renforcée** : Ajout de blocs `try/catch` autour de toutes les requêtes SQL dans `classes/certificate_packager.php` (méthodes : `fetch_certificates_for_course()`, `fetch_certificates_for_user()`, `fetch_certificates_for_cohort()`, `fetch_certificates_for_range()`, `download_certificates_by_date_range()`, `download_certificates_by_course()`, `download_user_certificates()`, `download_cohort_certificates()`, `download_single_certificate()`, `fetch_certificates_for_course_teacher()`). Chaque type de certificat (tool_certificate, customcert, mod_certificate, simplecertificate, certificatebeautiful) est traité indépendamment : si une requête échoue, les autres continuent.
+
+- **Résilience des requêtes dans certificate_query.php** : Les méthodes `get_tool_certificate_issues()`, `get_customcert_issues()`, `get_mod_certificate_issues()`, `get_simplecertificate_issues()`, `get_certificatebeautiful_issues()` retournent désormais un tableau vide `[]` en cas d'erreur SQL au lieu de propager l'exception. Toutes les erreurs sont loguées via `debugging()` avec un message explicite identifiant la méthode et la cause.
+
+- **Debugging amélioré** : Chaque échec de requête génère un message de debug spécifique (ex: `fetch_certificates_for_course: tool_certificate query failed: ...`) permettant un diagnostic précis sans bloquer le traitement global.
+
+## [2026052800] - 2026-05-28
+
+### Changed
+
+- **Numéro de version** : Mise à jour du build number dans `version.php` de `2026033100` à `2026052800`. Aucun changement fonctionnel ou technique associé à cette version.
+
+## [2026033102] - 2026-03-31
+
+### Changed
+
+- **Refactoring `get_courses_with_certificates_for_teacher()`** : La méthode dans `classes/certificate_query.php` accepte maintenant un paramètre `$scope` (tableau associatif cours => userids) au lieu de `$courseids`. Le comptage des certificats respecte désormais strictement le cloisonnement par groupes : seuls les certificats des utilisateurs visibles par l'enseignant dans chaque cours sont comptabilisés. Simplification du format de retour (un seul `certificate_count` au lieu de compteurs par type de certificat).
+
+- **Ajout de `composer.json`** : Fichier de configuration Composer ajouté à la racine du plugin. Autoload PSR-4 configuré pour le namespace `block_download_certificates\` pointant vers le dossier `classes/`. Permet l'intégration avec des outils externes compatibles Composer.
+
+### Fixed
+
+- **Comptage des certificats enseignants** : Correction du comptage qui incluait précédemment tous les certificats d'un cours enseigné, même ceux d'apprenants hors du périmètre de groupes de l'enseignant. Le nouveau calcul itère cours par cours et filtre par les userids du scope, garantissant que seuls les certificats accessibles sont comptés.
+
+## [2026033101] - 2025-06-09
+
+### Removed
+
+- **Affichage du périmètre enseignant dans le bloc** : Suppression du code dans `block_download_certificates.php` (lignes 580-595) qui affichait la liste des cours enseignés dans le bloc tableau de bord. La requête DB pour récupérer les noms de cours et l'affichage HTML associé ont été retirés.
+
+- **Bandeau de périmètre dans l'interface enseignant** : Suppression du bandeau d'information dans `templates/teacher_page.mustache` (lignes 34-40) qui affichait le badge "teacher_scope_courses". L'élément HTML contenant le badge badge-info a été retiré du template.
+
+### Changed
+
+- **Simplification de l'interface enseignant** : Le périmètre de visibilité des enseignants est toujours appliqué automatiquement par `classes/certificate_access.php`, mais n'est plus affiché explicitement dans l'interface. Les listes déroulantes de cours et d'utilisateurs restent filtrées selon le périmètre réel de l'enseignant.
+
 # Changelog
 
-## [1.4.2] - 2026-03-31
+All notable changes to the `block_download_certificates` plugin will be documented in this file.
 
-### Fixed
-- Téléchargement par lot (par cours, par cohorte, par utilisateur, par plage de dates) : quand le nombre de certificats était inférieur au seuil asynchrone (30), les formulaires se soumettaient vers `download.php` qui ne reconnaissait pas les actions spécifiques et redirigait vers la page d'accueil sans télécharger — chaque formulaire pointe maintenant vers son endpoint dédié (`download_course.php`, `download_cohort.php`, `download_user.php`, `download_range.php`)
-- Tableau des certificats : les en-têtes de colonnes affichaient `[[USER,CORE]]`, `[[EMAIL,CORE]]`, etc. car les chaînes core Moodle (`user`, `email`, `course`, `actions`) n'étaient pas chargées via `strings_for_js`
-- Noms de cours et de cohortes : les filtres multilang `{mlang}` n'étaient pas traités — ajout de `format_string()` dans `search_certificates.php` et `certificate_query.php` pour résoudre correctement les noms selon la langue de l'utilisateur
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Plugin versions follow the Moodle convention `YYYYMMDDXX`.
 
-## [1.4.1] - 2026-03-17
+## [2026033100] - 2026-03-31
+
+### Added
+
+- **Interface de gestion complète** : Page principale (`index.php`) avec tableau dynamique chargé via AJAX, recherche en temps réel, tri par colonne et pagination configurable. Template Mustache `main_page.mustache` pour le rendu.
+
+- **Traitement asynchrone des téléchargements** : Module JS `amd/src/async_download.js` qui intercepte les formulaires lorsque le nombre de certificats >= 30. Création de tâches via `ajax/create_task.php`, polling du statut via `ajax/task_status.php`, téléchargement via `ajax/download_zip.php`.
+
+- **Table de suivi des tâches** : Table `block_download_cert_tasks` dans `db/install.xml` avec champs : userid, type, params (JSON), status, progress, total, filepath, timecreated, timemodified, error, batchoffset. Index sur status et userid+status.
+
+- **Tâche planifiée de nettoyage** : Classe `block_download_certificates\task\cleanup_expired` exécutée toutes les heures. Supprime les tâches ready > 24h, failed > 7j, processing bloquées > 2h. Déclarée dans `db/tasks.php`.
+
+- **Tâche adhoc de génération ZIP** : Classe `block_download_certificates\task\generate_zip` avec traitement par lots de 500 certificats (BATCH_SIZE). Ré-ordonnancement automatique via `core\task\manager::queue_adhoc_task()`. Ajout d'un fichier `download_errors.txt` dans le ZIP en cas d'erreurs.
+
+- **Interface enseignant filtrée** : Page `index_teacher.php` avec périmètre de visibilité calculé par `classes/certificate_access.php`. Filtrage par cours enseignés et par groupes d'appartenance. Template `teacher_page.mustache`.
+
+- **Support multi-plugins de certificats** : Requêtes SQL dans `classes/certificate_query.php` pour 5 types : tool_certificate_issues, customcert_issues, certificate_issues, simplecertificate_issues, certificatebeautiful_issue.
+
+- **Récupération optimisée des PDF** : Classe `classes/certificate_retriever.php` avec 3 niveaux de priorité : pathnamehash direct (~1ms), recherche filestorage (~10ms), téléchargement HTTP fallback (~200-500ms).
+
+- **Empaquetage ZIP standardisé** : Classe `classes/certificate_packager.php` avec génération de noms de fichiers : `Prénom_Nom_NomCertificat_NomCours.pdf`. Gestion des collisions avec suffixe numérique.
+
+- **Bloc tableau de bord** : Fichier `block_download_certificates.php` avec 3 vues : gestionnaire (stats + actions), enseignant (périmètre filtré), apprenant (ses certificats uniquement).
+
+- **Endpoints AJAX** : 5 endpoints dans `ajax/` : create_task.php, task_status.php, download_zip.php, search_certificates.php, get_groups_for_course.php.
+
+- **Support bilingue** : Fichiers de langue `lang/en/block_download_certificates.php` et `lang/fr/block_download_certificates.php` avec 100+ chaînes traduites.
+
+- **Scripts CLI de test** : 5 scripts dans `cli/` : create_test_groups.php, generate_test_certificates.php, generate_test_certificates_customcert.php, purge_all_certificates.php, test_customcert_pdf.php.
 
 ### Changed
-- Bouton « Télécharger tous les certificats » dans le block (sidebar) : migration de l'ancien système synchrone (`download.php`) vers le système de téléchargement asynchrone (tâche adhoc + modal de progression + banner persistante)
-- Le seuil de 30 certificats pour le mode asynchrone est supprimé pour le bouton « Download All » — le téléchargement passe systématiquement en mode async
-- Le module AMD `async_download` est chargé dans le block en plus de la page de gestion, avec les chaînes de langue nécessaires
-- La banner de progression asynchrone fonctionne maintenant hors de la page de gestion (fallback sur `#page-content` ou `body`)
 
-## [1.4.0] - 2026-03-09
+- **Architecture modulaire** : Refactoring complet avec pattern Facade. Controller (`classes/controller.php`) délègue à Query, Retriever, Packager et Access.
 
-### Changed
-- Page de gestion : le tableau des certificats est maintenant chargé dynamiquement via AJAX avec pagination côté serveur — la page ne charge plus les 12 000+ certificats en mémoire PHP
-- Page de gestion : les 4 sections de filtrage (dates, cours, cohorte, utilisateur) sont regroupées en onglets Bootstrap au lieu de cartes empilées verticalement
-- `controller.php` : la méthode `get_certificates_data()` ne charge plus les enregistrements individuels, utilise `count_all_certificates()` pour le total
-- `styles.css` : réécriture complète avec styles pour les onglets, le tableau dynamique, les badges de type, la pagination, et les animations
+- **Tableau dynamique AJAX** : Remplacement du chargement serveur par un module JS `amd/src/certificate_table.js` avec recherche debounce (300ms), tri client, pagination et autocomplétion Moodle.
 
-### Added
-- Nouveau module AMD `certificate_table.js` : tableau dynamique avec pagination, tri par colonne, recherche avec debounce, badges de type de certificat, et initialisation de l'autocomplete Moodle
-- Nouvel endpoint AJAX `ajax/search_certificates.php` pour la recherche/pagination côté serveur
-- Nouvelles méthodes dans `certificate_query.php` : `search_all_certificates()`, `count_search_results()`, `build_union_subqueries()`, `apply_search_filter()` — utilisant `UNION ALL` pour combiner les 5 types de certificats en une requête paginée unique
-- Barre de recherche avec debounce (300ms) filtrant par nom, email, cours, modèle et code
-- Autocomplete Moodle (`core/form-autocomplete`) sur les 3 select de filtrage (cours, cohorte, utilisateur)
-- Badges colorés par type de certificat dans le tableau (Tool Certificate = bleu, Custom Cert = vert, etc.)
-- Nouvelles chaînes de langue EN/FR pour le tableau, la recherche et les types
+- **Gestion des permissions enseignant** : Logique centralisée dans `classes/certificate_access.php` avec cache statique (`$teachercoursecache`, `$teacherscopecache`) pour éviter les requêtes répétées.
 
-## [1.3.0] - 2026-03-09
-
-### Changed
-- Téléchargement asynchrone : traitement par lots de 500 certificats au lieu d'un traitement monolithique — la tâche adhoc se re-planifie automatiquement après chaque lot, éliminant les problèmes de mémoire et de timeout sur les grands volumes (10 000+ certificats)
-- Comptage des certificats : remplacement du chargement complet des données par des requêtes `COUNT(*)` SQL via 5 nouvelles méthodes `count_*_issues()` dans `certificate_query.php`
-- Gestion mémoire dans `add_certificates_to_zip()` : ajout de `unset($filecontent)` après chaque certificat et `gc_collect_cycles()` toutes les 50 itérations
-
-### Added
-- Nouvelle méthode `generate_zip_batch()` dans le packager pour le traitement paginé avec ajout incrémental au ZIP
-- Nouveau champ `batchoffset` dans la table `block_download_cert_tasks` pour sauvegarder la progression entre les lots
-- Appel à `raise_memory_limit(MEMORY_EXTRA)` au début de la tâche adhoc
-
-## [1.2.2] - 2026-02-20
+- **Seuil asynchrone** : Constante `ASYNC_THRESHOLD = 30` dans `async_download.js`. Configurable via la donnée passée depuis PHP.
 
 ### Fixed
-- Téléchargement asynchrone : les formulaires « par cours », « par cohorte » et « par utilisateur » passaient toujours en synchrone car le `data-cert-count` était à 0 en dur — le compteur est maintenant mis à jour dynamiquement selon l'option sélectionnée
-- Modale de progression : ajout d'un bouton de fermeture et d'un message informatif indiquant que l'utilisateur peut quitter la page et revenir plus tard
-- Banner « archive prête » : affiche maintenant le type d'archive et le nombre de certificats pour identifier l'archive
 
-### Added
-- Fichier de traduction français (`lang/fr/block_download_certificates.php`) avec toutes les chaînes traduites
-- Nouvelles chaînes de langues pour la modale (`async_can_close`) et le banner par type (`async_zip_ready_label_*`)
+- **Fuites de mémoire** : Appel à `gc_collect_cycles()` tous les 50 certificats dans `classes/certificate_packager.php` pendant la création ZIP.
 
-## [1.2.1] - 2026-02-20
+- **Validation des sessions** : Ajout de `require_sesskey()` sur tous les endpoints de téléchargement et de création de tâche.
 
-### Added
-- Script CLI `purge_all_certificates.php` pour supprimer tous les certificats de la plateforme (5 types : tool_certificate, customcert, mod_certificate, simplecertificate, certificatebeautiful) avec confirmation interactive et nettoyage des fichiers associés
+- **Accès enseignant aux groupes** : Endpoint `ajax/get_groups_for_course.php` qui retourne uniquement les groupes de l'enseignant dans le cours (pas tous les groupes du cours).
 
-### Fixed
-- Script `generate_test_certificates.php` : les certificats générés étaient des PDF vides (0 octets) à cause d'un cache de pages périmé dans l'objet template — rechargement du template depuis la DB avant l'émission
-- Script `generate_test_certificates.php` : ajout d'éléments visibles au template (bordure, titre, nom étudiant, date, code de vérification) et correction des champs de formulaire (`userfield`, `display`, `dateitem`)
-- Téléchargement ZIP : les certificats avec le même nom de fichier (même user + même template) étaient ignorés silencieusement au lieu d'être renommés avec un suffixe (`_2`, `_3`…) — tous les 5 types de certificats sont concernés
-- Nom de fichier des certificats `tool_certificate` : ajout du nom du cours pour différencier les certificats d'un même utilisateur
+- **Expiration des archives** : Marquage des tâches comme 'expired' après téléchargement dans `ajax/download_zip.php` avec suppression physique du fichier ZIP.
 
-## [1.2.0] - 2026-02-20
+### Removed
 
-### Added
-- Système de téléchargement asynchrone pour les lots ≥ 30 certificats
-  - Nouvelle table `block_download_cert_tasks` pour le suivi des tâches
-  - Adhoc task `generate_zip` pour la création ZIP en arrière-plan
-  - Scheduled task `cleanup_expired` (toutes les heures) pour nettoyer les ZIP expirés (>24h), les tâches échouées (>7j) et les tâches bloquées (>2h)
-  - 3 endpoints AJAX : `create_task.php`, `task_status.php`, `download_zip.php`
-  - Module AMD `async_download.js` avec modal Bootstrap, barre de progression temps réel et auto-download
-- Méthodes `generate_zip_to_file()`, `fetch_certificates_for_type()`, `count_certificates_for_type()` dans le packager
-- Callback de progression dans `add_certificates_to_zip()` pour le suivi en temps réel
-- Méthode `get_pending_tasks()` dans le controller pour restaurer les tâches en cours au chargement de page
-
-## [1.1.0] - 2026-02-20
-
-### Changed
-- Refactoring majeur du `controller.php` (3331 → 361 lignes) en façade légère avec extraction de 3 classes :
-  - `certificate_retriever.php` : récupération du contenu PDF (stockage fichier + HTTP)
-  - `certificate_query.php` : centralisation de toutes les requêtes SQL
-  - `certificate_packager.php` : création ZIP, génération de noms de fichiers, envoi
-- Factorisation de la logique ZIP dupliquée via `add_certificates_to_zip()` et `create_and_send_zip()`
-- API publique du controller conservée à 100% — aucun fichier appelant modifié
-
-## [1.0.1] - 2026-02-20
-
-### Fixed
-- Correction des sections vides (par cours, par cohorte, par utilisateur) sur la page index : ajout des vérifications `table_exists('tool_certificate_issues')` manquantes dans `get_courses_with_certificates()` et `get_users_with_certificates()`
-- Ajout de `try/catch` autour de chaque requête SQL dans `get_courses_with_certificates()` et `get_users_with_certificates()` pour isoler les erreurs par type de certificat
-- Correction de l'erreur fatale `Call to undefined method get_simplecertificate_via_authenticated_api()` lors du téléchargement groupé : la méthode n'existait pas, remplacée par un fallback vers la méthode URL
-- Correction des erreurs `Duplicate value found in column 'id'` dans `get_simplecertificate_issues()` : le `LEFT JOIN` sur `c.shortname = si.coursename` pouvait produire des doublons si plusieurs cours partagent le même shortname, remplacé par une sous-requête scalaire
+- **Aucune suppression** : Version initiale du plugin, aucune fonctionnalité retirée.

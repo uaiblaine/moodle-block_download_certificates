@@ -183,3 +183,16 @@ $string['tab_date_range'] = 'Par dates';
 $string['tab_course'] = 'Par cours';
 $string['tab_cohort'] = 'Par cohorte';
 $string['tab_user'] = 'Par utilisateur';
+
+// Chaînes pour l'interface enseignant.
+$string['teacher_panel'] = 'Panneau Enseignant';
+$string['teacher_scope_courses'] = 'Périmètre : vos cours';
+$string['teacher_scope_groups'] = 'Périmètre : vos groupes ({$a})';
+$string['no_teacher_courses'] = 'Vous n\'avez aucun cours en tant qu\'enseignant.';
+$string['teacher_certificates'] = 'Certificats de vos étudiants';
+$string['access_denied_certificate'] = 'Accès refusé : ce certificat n\'est pas dans votre périmètre.';
+$string['teacher_no_certificates'] = 'Aucun certificat trouvé dans votre périmètre.';
+$string['all_groups'] = 'Tous les groupes';
+$string['choose_group'] = 'Choisir un groupe';
+$string['invalidgroup'] = 'Groupe invalide ou inaccessible.';
+

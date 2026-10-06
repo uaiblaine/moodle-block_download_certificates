@@ -31,6 +31,53 @@ define(['jquery'], function ($) {
     /** @var {Object|null} Current active task state tracked for banner updates */
     var activeTask = null;
 
+    // =========================================================================
+    // Persistance des banners fermés (localStorage)
+    // =========================================================================
+
+    /** @const {string} Clé localStorage pour les IDs de tâches fermées */
+    var DISMISSED_STORAGE_KEY = 'dc_dismissed_ready_tasks';
+
+    /**
+     * Retourne la liste des IDs de tâches "ready" fermées par l'utilisateur.
+     *
+     * @return {Array<number>}
+     */
+    function getDismissedTasks() {
+        try {
+            return JSON.parse(localStorage.getItem(DISMISSED_STORAGE_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /**
+     * Mémorise un ID de tâche comme fermé pour ne plus l'afficher.
+     *
+     * @param {number} taskid
+     */
+    function dismissTask(taskid) {
+        var dismissed = getDismissedTasks();
+        if (dismissed.indexOf(taskid) === -1) {
+            dismissed.push(taskid);
+            // Garder seulement les 50 derniers pour ne pas surcharger le localStorage.
+            if (dismissed.length > 50) {
+                dismissed = dismissed.slice(-50);
+            }
+            localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(dismissed));
+        }
+    }
+
+    /**
+     * Vérifie si une tâche a déjà été fermée par l'utilisateur.
+     *
+     * @param {number} taskid
+     * @return {boolean}
+     */
+    function isTaskDismissed(taskid) {
+        return getDismissedTasks().indexOf(taskid) !== -1;
+    }
+
     /**
      * Initialize the async download module.
      *
@@ -54,7 +101,10 @@ define(['jquery'], function ($) {
         if (config.pending_tasks && config.pending_tasks.length > 0) {
             config.pending_tasks.forEach(function (task) {
                 if (task.status === 'ready') {
-                    showReadyBanner(task);
+                    // Ne pas ré-afficher les banners que l'utilisateur a explicitement fermés.
+                    if (!isTaskDismissed(task.taskid)) {
+                        showReadyBanner(task);
+                    }
                 } else if (task.status === 'pending' || task.status === 'processing') {
                     // On page revisit: show banner, NOT modal.
                     activeTask = {
@@ -434,11 +484,11 @@ define(['jquery'], function ($) {
         var modalHtml = '<div id="async-download-modal" class="modal fade show" style="display:block;" tabindex="-1">' +
             '<div class="modal-dialog modal-dialog-centered">' +
             '<div class="modal-content">' +
-            '<div class="modal-header bg-primary text-white">' +
+            '<div class="modal-header bg-primary text-white" style="justify-content: space-between;">' +
             '<h5 class="modal-title"><i class="fa fa-download"></i> ' +
             M.util.get_string('async_generating', 'block_download_certificates') + '</h5>' +
             '<button type="button" class="cert-close-btn" id="async-close-btn" aria-label="Close">' +
-            '<span aria-hidden="true">&times;</span></button>' +
+            '<span aria-hidden="true">&times;</span></button > ' +
             '</div>' +
             '<div class="modal-body text-center">' +
             '<div id="async-status-text" class="mb-3">' +
@@ -446,8 +496,7 @@ define(['jquery'], function ($) {
             '<p class="mt-2">' + M.util.get_string('async_preparing', 'block_download_certificates') + '</p>' +
             '</div>' +
             '<div class="progress" style="height: 25px;">' +
-            '<div id="async-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" ' +
-            'role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>' +
+            '<div id="async-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" ' + ' role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>' +
             '</div>' +
             '<p id="async-progress-detail" class="text-muted mt-2 small">0 / ' + total + '</p>' +
             '<div class="alert alert-info mt-3 small" id="async-info-message">' +
@@ -455,8 +504,7 @@ define(['jquery'], function ($) {
             M.util.get_string('async_can_close', 'block_download_certificates') +
             '</div>' +
             '</div>' +
-            '</div></div></div>' +
-            '<div id="async-modal-backdrop" class="modal-backdrop fade show"></div>';
+            '</div></div></div>';
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
 
@@ -521,16 +569,23 @@ define(['jquery'], function ($) {
 
     /**
      * Hide and remove the progress modal. Shows progress banner if task is still active.
+     * Supprime aussi tous les backdrops résiduels générés par Bootstrap/Moodle.
      */
     function hideProgressModal() {
         var modal = document.getElementById('async-download-modal');
-        var backdrop = document.getElementById('async-modal-backdrop');
         if (modal) {
             modal.remove();
         }
-        if (backdrop) {
-            backdrop.remove();
-        }
+
+        // Supprimer tous les backdrops (le nôtre + celui généré automatiquement par Bootstrap).
+        document.querySelectorAll('.modal-backdrop').forEach(function (bd) {
+            bd.remove();
+        });
+
+        // S'assurer que le body n'est plus verrouillé par le modal.
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
 
         // If there's an active task still in progress, show the banner.
         if (activeTask && (activeTask.status === 'pending' || activeTask.status === 'processing')) {
@@ -600,20 +655,34 @@ define(['jquery'], function ($) {
             label = M.util.get_string('async_zip_ready', 'block_download_certificates');
         }
 
-        var bannerHtml = '<div id="async-ready-banner-' + task.taskid + '" ' +
+        var bannerId = 'async-ready-banner-' + task.taskid;
+        var bannerHtml = '<div id="' + bannerId + '" ' +
             'class="alert alert-success alert-dismissible fade show mx-3 mt-2" role="alert">' +
             '<i class="fa fa-check-circle"></i> ' +
             label + ' (' + task.total + ' ' + M.util.get_string('certificates', 'block_download_certificates') + ')' +
             ' <a href="' + downloadUrl + '" class="btn btn-sm btn-success ml-2">' +
             '<i class="fa fa-download"></i> ' +
             M.util.get_string('async_download', 'block_download_certificates') + '</a>' +
-            '<button type="button" class="cert-close-btn cert-close-btn-dark" data-dismiss="alert" data-bs-dismiss="alert" aria-label="Close">' +
+            '<button type="button" class="cert-close-btn cert-close-btn-dark js-dismiss-ready-banner"' +
+            ' data-taskid="' + task.taskid + '"' +
+            ' data-dismiss="alert" data-bs-dismiss="alert" aria-label="Close">' +
             '<span aria-hidden="true">&times;</span></button></div>';
 
         var mainBlock = document.querySelector('.block-download-certificat-main')
             || document.getElementById('page-content')
             || document.body;
         mainBlock.insertAdjacentHTML('afterbegin', bannerHtml);
+
+        // Mémoriser la fermeture dans localStorage pour ne pas ré-afficher au rechargement.
+        var bannerEl = document.getElementById(bannerId);
+        if (bannerEl) {
+            var closeBtn = bannerEl.querySelector('.js-dismiss-ready-banner');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function () {
+                    dismissTask(parseInt(this.getAttribute('data-taskid'), 10));
+                });
+            }
+        }
     }
 
     return {

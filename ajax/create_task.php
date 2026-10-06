@@ -29,12 +29,22 @@ require_once(__DIR__ . '/../../../config.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_retriever.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_query.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_packager.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
 
 require_login();
 require_sesskey();
 
 $context = context_system::instance();
-require_capability('block/download_certificates:manage', $context);
+
+// Vérification du niveau d'accès (gestionnaire ou enseignant).
+$ismanager = has_capability('block/download_certificates:manage', $context);
+$access    = new block_download_certificates_access();
+$isteacher = !$ismanager && $access->is_teacher($USER->id);
+
+if (!$ismanager && !$isteacher) {
+    echo json_encode(['success' => false, 'error' => get_string('accessdenied', 'block_download_certificates')]);
+    die();
+}
 
 $type = required_param('type', PARAM_ALPHANUMEXT);
 $paramsraw = optional_param('params', '{}', PARAM_RAW);
@@ -44,11 +54,38 @@ if (!is_array($params)) {
     $params = [];
 }
 
-// Validate type.
+// Validate type selon le niveau d'accès.
+// Les enseignants ne peuvent créer que des tâches de type 'course' ou 'user'.
+// Ils ne peuvent pas créer de tâches 'all', 'cohort' ou 'range'.
 $validtypes = ['all', 'course', 'user', 'cohort', 'range'];
+$teachertypes = ['course', 'user'];
+
+if ($isteacher && !in_array($type, $teachertypes)) {
+    echo json_encode(['success' => false, 'error' => get_string('accessdenied', 'block_download_certificates')]);
+    die();
+}
+
 if (!in_array($type, $validtypes)) {
     echo json_encode(['success' => false, 'error' => 'Invalid download type']);
     die();
+}
+
+// Vérification du périmètre de l'enseignant pour les paramètres spécifiques.
+if ($isteacher) {
+    if ($type === 'course' && !empty($params['courseid'])) {
+        $courseid = (int) $params['courseid'];
+        if (!in_array($courseid, $access->get_teacher_course_ids($USER->id))) {
+            echo json_encode(['success' => false, 'error' => get_string('accessdenied', 'block_download_certificates')]);
+            die();
+        }
+    } else if ($type === 'user' && !empty($params['userid'])) {
+        $targetuserid = (int) $params['userid'];
+        $alluserids = $access->get_teacher_all_visible_user_ids($USER->id);
+        if (!in_array($targetuserid, $alluserids, true)) {
+            echo json_encode(['success' => false, 'error' => get_string('accessdenied', 'block_download_certificates')]);
+            die();
+        }
+    }
 }
 
 try {

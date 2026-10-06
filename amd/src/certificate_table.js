@@ -52,6 +52,7 @@ define(['jquery', 'core/form-autocomplete'], function ($, Autocomplete) {
         bindSearchInput();
         bindPerPageSelect();
         bindSortHeaders();
+        bindCourseGroupSelector();
 
         // Initial load.
         loadPage();
@@ -149,6 +150,62 @@ define(['jquery', 'core/form-autocomplete'], function ($, Autocomplete) {
             }
             state.page = 0;
             loadPage();
+        });
+    }
+
+    /**
+     * Écoute le changement de cours et charge les groupes de l'enseignant
+     * via AJAX. Affiche le sélecteur de groupe si ≥1 groupe est disponible.
+     */
+    function bindCourseGroupSelector() {
+        var courseSelect = document.getElementById('course_select');
+        var groupWrapper = document.getElementById('group-select-wrapper');
+        var groupSelect  = document.getElementById('group_select');
+
+        if (!courseSelect || !groupWrapper || !groupSelect) {
+            return;
+        }
+
+        courseSelect.addEventListener('change', function () {
+            var courseid = courseSelect.value;
+
+            // Réinitialiser et masquer le sélecteur de groupe.
+            groupWrapper.style.display = 'none';
+            groupSelect.innerHTML = '';
+
+            if (!courseid) {
+                return;
+            }
+
+            // Appel AJAX pour récupérer les groupes du cours.
+            $.ajax({
+                url: ajaxBase + 'get_groups_for_course.php',
+                method: 'GET',
+                data: {
+                    courseid: courseid,
+                    sesskey: state.sesskey
+                },
+                dataType: 'json',
+                success: function (response) {
+                    if (!response.success || !response.groups || response.groups.length === 0) {
+                        // Pas de groupes : ne pas afficher le sélecteur.
+                        return;
+                    }
+
+                    // Construire les options : d'abord "Tous les groupes".
+                    var allLabel = M.util.get_string('all_groups', 'block_download_certificates') ||
+                                  'Tous les groupes';
+                    var html = '<option value="">' + allLabel + '</option>';
+
+                    response.groups.forEach(function (g) {
+                        html += '<option value="' + g.id + '">' +
+                            escapeHtml(g.name) + '</option>';
+                    });
+
+                    groupSelect.innerHTML = html;
+                    groupWrapper.style.display = '';
+                }
+            });
         });
     }
 

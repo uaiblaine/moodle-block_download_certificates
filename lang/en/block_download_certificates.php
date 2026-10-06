@@ -200,3 +200,15 @@ $string['tab_user'] = 'By user';
 
 // RGPD Data.
 $string['privacy:metadata'] = 'The Download Certificates plugin does not store any personal data.';
+
+// Teacher access strings.
+$string['teacher_panel'] = 'Teacher Panel';
+$string['teacher_scope_courses'] = 'Scope: your courses';
+$string['teacher_scope_groups'] = 'Scope: your groups ({$a})';
+$string['no_teacher_courses'] = 'You have no courses as a teacher.';
+$string['teacher_certificates'] = 'Certificates from your students';
+$string['access_denied_certificate'] = 'Access denied: this certificate is not within your scope.';
+$string['teacher_no_certificates'] = 'No certificates found within your scope.';
+$string['all_groups'] = 'All groups';
+$string['choose_group'] = 'Choose a group';
+$string['invalidgroup'] = 'Invalid or inaccessible group.';

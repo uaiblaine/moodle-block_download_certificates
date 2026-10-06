@@ -26,12 +26,20 @@
 
 require_once('../../config.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
 
 require_login();
 
-// Check permissions.
+// Vérification des permissions (gestionnaire ou enseignant).
 $context = context_system::instance();
-require_capability('block/download_certificates:manage', $context);
+$ismanager = has_capability('block/download_certificates:manage', $context);
+$access = new block_download_certificates_access();
+$isteacher = !$ismanager && $access->is_teacher($USER->id);
+
+if (!$ismanager && !$isteacher) {
+    // Ni gestionnaire ni enseignant : accès refusé (fail-close).
+    require_capability('block/download_certificates:manage', $context);
+}
 
 // Get parameters.
 $type = optional_param('type', 'tool_certificate', PARAM_ALPHANUMEXT);
@@ -48,23 +56,57 @@ try {
 
     if ($type === 'customcert') {
         // For customcert, download PDF via URL and serve it.
-        $userid = required_param('userid', PARAM_INT);
+        $userid        = required_param('userid', PARAM_INT);
         $certificateid = required_param('certificateid', PARAM_INT);
+
+        // Vérification périmètre enseignant (tient compte des groupes par cours).
+        if ($isteacher) {
+            global $DB;
+            $issue = $DB->get_record_sql(
+                "SELECT cc.course FROM {customcert_issues} ci
+                  JOIN {customcert} cc ON cc.id = ci.customcertid
+                  WHERE ci.userid = :uid AND ci.customcertid = :cid",
+                ['uid' => $userid, 'cid' => $certificateid], IGNORE_MISSING
+            );
+            $courseid = $issue ? (int) $issue->course : 0;
+            $access->require_teacher_access_to_certificate($userid, $courseid);
+        }
 
         $controller->download_single_customcert($userid, $certificateid);
 
     } else if ($type === 'mod_certificate') {
         // For mod_certificate, use the new method.
-        $userid = required_param('userid', PARAM_INT);
+        $userid        = required_param('userid', PARAM_INT);
         $certificateid = required_param('certificateid', PARAM_INT);
+
+        // Vérification périmètre enseignant (tient compte des groupes par cours).
+        if ($isteacher) {
+            global $DB;
+            $issue = $DB->get_record_sql(
+                "SELECT cert.course FROM {certificate_issues} ci
+                  JOIN {certificate} cert ON cert.id = ci.certificateid
+                  WHERE ci.userid = :uid AND ci.certificateid = :cid",
+                ['uid' => $userid, 'cid' => $certificateid], IGNORE_MISSING
+            );
+            $courseid = $issue ? (int) $issue->course : 0;
+            $access->require_teacher_access_to_certificate($userid, $courseid);
+        }
 
         $controller->download_single_mod_certificate($userid, $certificateid);
 
     } else if ($type === 'mod_simplecertificate') {
         // For mod_simplecertificate, use the API method.
-        $userid = required_param('userid', PARAM_INT);
+        $userid        = required_param('userid', PARAM_INT);
         $certificateid = required_param('certificateid', PARAM_INT);
-        $code = required_param('code', PARAM_ALPHANUMEXT);
+        $code          = required_param('code', PARAM_ALPHANUMEXT);
+
+        // Vérification périmètre enseignant (pas de courseid direct, on vérifie la liste plate).
+        if ($isteacher) {
+            $alluserids = $access->get_teacher_all_visible_user_ids($USER->id);
+            if (!in_array($userid, $alluserids, true)) {
+                throw new moodle_exception('accessdenied', 'block_download_certificates');
+            }
+        }
 
         $controller->download_single_simplecertificate($userid, $certificateid, $code);
 
@@ -74,6 +116,14 @@ try {
         $certificateid = required_param('certificateid', PARAM_INT);
         $code = required_param('code', PARAM_ALPHANUMEXT);
 
+        // Vérification périmètre enseignant.
+        if ($isteacher) {
+            $alluserids = $access->get_teacher_all_visible_user_ids($USER->id);
+            if (!in_array($userid, $alluserids, true)) {
+                throw new moodle_exception('accessdenied', 'block_download_certificates');
+            }
+        }
+
         $controller->download_single_certificatebeautiful($userid, $certificateid, $code);
 
     } else {
@@ -81,14 +131,31 @@ try {
         $timecreated = required_param('timecreated', PARAM_INT);
         $code = required_param('code', PARAM_ALPHANUMEXT);
 
+        // Vérification périmètre enseignant via le code du certificat.
+        if ($isteacher) {
+            global $DB;
+            $dbman = $DB->get_manager();
+            if ($dbman->table_exists('tool_certificate_issues')) {
+                $issue = $DB->get_record('tool_certificate_issues',
+                    ['timecreated' => $timecreated, 'code' => $code], 'userid,courseid', IGNORE_MISSING);
+                if (!$issue) {
+                    throw new moodle_exception('certificatenotfound', 'block_download_certificates');
+                }
+                $access->require_teacher_access_to_certificate((int)$issue->userid, (int)$issue->courseid);
+            }
+        }
+
         $controller->download_single_certificate($timecreated, $code);
     }
+
 
 } catch (Exception $e) {
     debugging('Certificate download error: ' . $e->getMessage());
 
-    // Redirect back to the main page with error.
-    $returnurl = new moodle_url('/blocks/download_certificates/index.php');
+    // Redirection vers la bonne page selon le rôle.
+    $returnurl = $isteacher
+        ? new moodle_url('/blocks/download_certificates/index_teacher.php')
+        : new moodle_url('/blocks/download_certificates/index.php');
     redirect($returnurl, get_string('cannotdownloadcertificate', 'block_download_certificates'), null,
                                     \core\output\notification::NOTIFY_ERROR);
 }

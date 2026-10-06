@@ -26,6 +26,7 @@
 
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
 
 require_login();
 
@@ -39,15 +40,29 @@ require_sesskey();
 // Check context and permissions.
 $context = context_system::instance();
 
+$ismanager = has_capability('block/download_certificates:manage', $context);
+$access    = new block_download_certificates_access();
+$isteacher = !$ismanager && $access->is_teacher($USER->id);
+
 if ($action === 'download_my_certificates') {
     // User downloading their own certificates.
     require_capability('block/download_certificates:view', $context);
     $userid = $USER->id;
 } else if ($action === 'download_user') {
-    // Administrator downloading certificates for a specific user.
-    require_capability('block/download_certificates:manage', $context);
+    // Téléchargement pour un utilisateur spécifique.
+    if (!$ismanager && !$isteacher) {
+        // Accès refusé si ni gestionnaire ni enseignant.
+        require_capability('block/download_certificates:manage', $context);
+    }
     if (!$userid) {
         throw new moodle_exception('missingparam', 'error', '', 'userid');
+    }
+    // Vérification que l'enseignant peut accéder à cet utilisateur.
+    if ($isteacher) {
+        $alluserids = $access->get_teacher_all_visible_user_ids($USER->id);
+        if (!in_array($userid, $alluserids, true)) {
+            throw new moodle_exception('accessdenied', 'block_download_certificates');
+        }
     }
 } else {
     throw new moodle_exception('invalidaction', 'block_download_certificates');

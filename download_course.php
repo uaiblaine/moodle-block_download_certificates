@@ -27,15 +27,28 @@
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/lib.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_retriever.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_query.php');
+require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_packager.php');
 
 require_login();
 
 $context = context_system::instance();
-require_capability('block/download_certificates:manage', $context);
+
+// Vérification du niveau d'accès (gestionnaire ou enseignant).
+$ismanager = has_capability('block/download_certificates:manage', $context);
+$access = new block_download_certificates_access();
+$isteacher = !$ismanager && $access->is_teacher($USER->id);
+
+if (!$ismanager && !$isteacher) {
+    require_capability('block/download_certificates:manage', $context);
+}
 
 // Get parameters.
-$action = required_param('action', PARAM_ALPHANUMEXT);
+$action   = required_param('action', PARAM_ALPHANUMEXT);
 $courseid = required_param('courseid', PARAM_INT);
+$groupid  = optional_param('groupid', 0, PARAM_INT); // 0 = tous les groupes.
 
 // Verify sesskey.
 require_sesskey();
@@ -45,20 +58,38 @@ if ($action !== 'download_course') {
 }
 
 if (empty($courseid)) {
-    redirect(new moodle_url('/blocks/download_certificates/index.php'),
+    $returnurl = $ismanager
+        ? new moodle_url('/blocks/download_certificates/index.php')
+        : new moodle_url('/blocks/download_certificates/index_teacher.php');
+    redirect($returnurl,
              get_string('coursenotselected', 'block_download_certificates'),
              null,
              \core\output\notification::NOTIFY_ERROR);
 }
 
-// Initialize controller and download certificates.
-$controller = new block_download_certificates_controller();
-
-try {
-    $controller->download_certificates_by_course($courseid);
-} catch (Exception $e) {
-    redirect(new moodle_url('/blocks/download_certificates/index.php'),
-             $e->getMessage(),
-             null,
-             \core\output\notification::NOTIFY_ERROR);
+// Délégation selon le niveau d'accès.
+if ($ismanager) {
+    // Mode gestionnaire : téléchargement complet du cours.
+    $controller = new block_download_certificates_controller();
+    try {
+        $controller->download_certificates_by_course($courseid);
+    } catch (Exception $e) {
+        redirect(new moodle_url('/blocks/download_certificates/index.php'),
+                 $e->getMessage(),
+                 null,
+                 \core\output\notification::NOTIFY_ERROR);
+    }
+} else {
+    // Mode enseignant : téléchargement filtré sur le périmètre (+ groupe optionnel).
+    $retriever = new block_download_certificates_retriever();
+    $query     = new block_download_certificates_query();
+    $packager  = new block_download_certificates_packager($retriever, $query);
+    try {
+        $packager->download_certificates_by_course_for_teacher($courseid, $USER->id, $groupid ?: null);
+    } catch (Exception $e) {
+        redirect(new moodle_url('/blocks/download_certificates/index_teacher.php'),
+                 $e->getMessage(),
+                 null,
+                 \core\output\notification::NOTIFY_ERROR);
+    }
 }
