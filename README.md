@@ -24,4 +24,4 @@ Ce plugin Moodle permet de télécharger des certificats individuellement ou en 
 
 ## Version
 
-Version 1.4.1 - Compatible Moodle 4.1+
+Version 1.6.1 - Compatible Moodle 4.3+

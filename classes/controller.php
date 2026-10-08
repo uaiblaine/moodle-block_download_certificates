@@ -257,7 +257,7 @@ class block_download_certificates_controller {
         global $DB, $USER;
 
         $tasks = $DB->get_records_select(
-            'block_download_cert_tasks',
+            'block_download_certificates_tasks',
             "userid = ? AND status IN ('pending', 'processing', 'ready')",
             [$USER->id],
             'timecreated DESC'

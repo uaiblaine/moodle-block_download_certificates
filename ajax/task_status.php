@@ -31,7 +31,7 @@ require_login();
 
 $taskid = required_param('taskid', PARAM_INT);
 
-$task = $DB->get_record('block_download_cert_tasks', ['id' => $taskid]);
+$task = $DB->get_record('block_download_certificates_tasks', ['id' => $taskid]);
 
 if (!$task) {
     echo json_encode(['success' => false, 'error' => 'Task not found']);

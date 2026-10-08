@@ -58,7 +58,7 @@ class cleanup_expired extends \core\task\scheduled_task {
         // 1. Clean up ready tasks older than 24 hours.
         $expirytime = $now - (24 * 3600);
         $expiredtasks = $DB->get_records_select(
-            'block_download_cert_tasks',
+            'block_download_certificates_tasks',
             "status = 'ready' AND timecreated < ?",
             [$expirytime]
         );
@@ -69,20 +69,20 @@ class cleanup_expired extends \core\task\scheduled_task {
                 unlink($task->filepath);
                 mtrace("Deleted expired ZIP: {$task->filepath}");
             }
-            $DB->delete_records('block_download_cert_tasks', ['id' => $task->id]);
+            $DB->delete_records('block_download_certificates_tasks', ['id' => $task->id]);
             $cleaned++;
         }
 
         // 2. Clean up failed tasks older than 7 days.
         $failedexpiry = $now - (7 * 24 * 3600);
         $failedcount = $DB->count_records_select(
-            'block_download_cert_tasks',
+            'block_download_certificates_tasks',
             "status = 'failed' AND timecreated < ?",
             [$failedexpiry]
         );
         if ($failedcount > 0) {
             $DB->delete_records_select(
-                'block_download_cert_tasks',
+                'block_download_certificates_tasks',
                 "status = 'failed' AND timecreated < ?",
                 [$failedexpiry]
             );
@@ -92,13 +92,13 @@ class cleanup_expired extends \core\task\scheduled_task {
         // 3. Clean up stuck processing tasks older than 2 hours.
         $stuckexpiry = $now - (2 * 3600);
         $stucktasks = $DB->get_records_select(
-            'block_download_cert_tasks',
+            'block_download_certificates_tasks',
             "status = 'processing' AND timemodified < ?",
             [$stuckexpiry]
         );
 
         foreach ($stucktasks as $task) {
-            $DB->update_record('block_download_cert_tasks', (object) [
+            $DB->update_record('block_download_certificates_tasks', (object) [
                 'id' => $task->id,
                 'status' => 'failed',
                 'error' => 'Task timed out (stuck for more than 2 hours)',
@@ -109,13 +109,13 @@ class cleanup_expired extends \core\task\scheduled_task {
 
         // 4. Clean up expired tasks.
         $expiredcount = $DB->count_records_select(
-            'block_download_cert_tasks',
+            'block_download_certificates_tasks',
             "status = 'expired'"
         );
         if ($expiredcount > 0) {
             // Delete ZIP files for expired tasks first.
             $expiredrecords = $DB->get_records_select(
-                'block_download_cert_tasks',
+                'block_download_certificates_tasks',
                 "status = 'expired'"
             );
             foreach ($expiredrecords as $task) {
@@ -124,7 +124,7 @@ class cleanup_expired extends \core\task\scheduled_task {
                 }
             }
             $DB->delete_records_select(
-                'block_download_cert_tasks',
+                'block_download_certificates_tasks',
                 "status = 'expired'"
             );
             $cleaned += $expiredcount;

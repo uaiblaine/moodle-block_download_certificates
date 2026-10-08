@@ -71,7 +71,7 @@ class generate_zip extends \core\task\adhoc_task {
         $offset = isset($data->offset) ? (int) $data->offset : 0;
 
         // Fetch the task record.
-        $task = $DB->get_record('block_download_cert_tasks', ['id' => $taskid]);
+        $task = $DB->get_record('block_download_certificates_tasks', ['id' => $taskid]);
         if (!$task) {
             mtrace("Task {$taskid} not found, skipping.");
             return;
@@ -85,7 +85,7 @@ class generate_zip extends \core\task\adhoc_task {
 
         // Update status to processing (only on first batch).
         if ($task->status === 'pending') {
-            $DB->update_record('block_download_cert_tasks', (object) [
+            $DB->update_record('block_download_certificates_tasks', (object) [
                 'id' => $taskid,
                 'status' => 'processing',
                 'timemodified' => time(),
@@ -102,7 +102,7 @@ class generate_zip extends \core\task\adhoc_task {
             // On first batch, count total certificates and save.
             if ($offset === 0) {
                 $total = $packager->count_certificates_for_type($task->type, $params);
-                $DB->update_record('block_download_cert_tasks', (object) [
+                $DB->update_record('block_download_certificates_tasks', (object) [
                     'id' => $taskid,
                     'total' => $total,
                     'timemodified' => time(),
@@ -118,7 +118,7 @@ class generate_zip extends \core\task\adhoc_task {
             $lastupdate = 0;
             $progresscallback = function ($processed) use ($DB, $taskid, &$lastupdate) {
                 if ($processed - $lastupdate >= 10 || $processed === 0) {
-                    $DB->update_record('block_download_cert_tasks', (object) [
+                    $DB->update_record('block_download_certificates_tasks', (object) [
                         'id' => $taskid,
                         'progress' => $processed,
                         'timemodified' => time(),
@@ -150,7 +150,7 @@ class generate_zip extends \core\task\adhoc_task {
             }
 
             // Save the ZIP path and update progress.
-            $DB->update_record('block_download_cert_tasks', (object) [
+            $DB->update_record('block_download_certificates_tasks', (object) [
                 'id' => $taskid,
                 'progress' => $newoffset,
                 'filepath' => $result['zippath'],
@@ -186,7 +186,7 @@ class generate_zip extends \core\task\adhoc_task {
                 }
 
                 // Mark as ready.
-                $DB->update_record('block_download_cert_tasks', (object) [
+                $DB->update_record('block_download_certificates_tasks', (object) [
                     'id' => $taskid,
                     'status' => 'ready',
                     'progress' => $result['total'],
@@ -200,7 +200,7 @@ class generate_zip extends \core\task\adhoc_task {
 
         } catch (\Exception $e) {
             // Mark task as failed.
-            $DB->update_record('block_download_cert_tasks', (object) [
+            $DB->update_record('block_download_certificates_tasks', (object) [
                 'id' => $taskid,
                 'status' => 'failed',
                 'error' => $e->getMessage(),

@@ -112,7 +112,7 @@ try {
     $taskrecord->timecreated = time();
     $taskrecord->timemodified = time();
 
-    $taskid = $DB->insert_record('block_download_cert_tasks', $taskrecord);
+    $taskid = $DB->insert_record('block_download_certificates_tasks', $taskrecord);
 
     // Schedule the adhoc task.
     $adhoctask = new \block_download_certificates\task\generate_zip();

@@ -1,3 +1,10 @@
+## [2026100700] - 2026-10-07
+
+### Changed
+
+- **Renommage de la table de suivi des taches** : `block_download_cert_tasks` devient `block_download_certificates_tasks` pour respecter le prefixe frankenstyle exige par le validateur de plugins (`In db/install.xml, failed to find table prefixes`). Etape de mise a niveau `2026100700` dans `db/upgrade.php` qui renomme la table existante, donnees conservees.
+- **Compatibilite** : Moodle 4.3 minimum (`requires = 2023100900`, `supported = [403, 503]`). Le nouveau nom (33 caracteres) depasse la limite de 28 caracteres des noms de table de Moodle 4.1 et 4.2.
+
 ## [2026052800] - 2026-05-28
 
 ### Changed

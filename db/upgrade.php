@@ -83,5 +83,17 @@ function xmldb_block_download_certificates_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026030900, 'download_certificates');
     }
 
+    if ($oldversion < 2026100700) {
+        // Rename block_download_cert_tasks to block_download_certificates_tasks (frankenstyle table prefix).
+        $table = new xmldb_table('block_download_cert_tasks');
+
+        if ($dbman->table_exists($table) && !$dbman->table_exists('block_download_certificates_tasks')) {
+            $dbman->rename_table($table, 'block_download_certificates_tasks');
+        }
+
+        // Block savepoint reached.
+        upgrade_block_savepoint(true, 2026100700, 'download_certificates');
+    }
+
     return true;
 }

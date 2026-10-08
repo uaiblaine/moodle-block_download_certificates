@@ -30,7 +30,7 @@ require_sesskey();
 
 $taskid = required_param('taskid', PARAM_INT);
 
-$task = $DB->get_record('block_download_cert_tasks', ['id' => $taskid]);
+$task = $DB->get_record('block_download_certificates_tasks', ['id' => $taskid]);
 
 if (!$task) {
     throw new moodle_exception('tasknotfound', 'block_download_certificates');
@@ -49,7 +49,7 @@ if ($task->status !== 'ready') {
 // Verify the file exists.
 if (empty($task->filepath) || !file_exists($task->filepath)) {
     // Mark as expired if file is missing.
-    $DB->update_record('block_download_cert_tasks', (object) [
+    $DB->update_record('block_download_certificates_tasks', (object) [
         'id' => $task->id,
         'status' => 'expired',
         'timemodified' => time(),
@@ -61,7 +61,7 @@ if (empty($task->filepath) || !file_exists($task->filepath)) {
 $filename = basename($task->filepath);
 
 // Mark task as expired (downloaded once = consumed).
-$DB->update_record('block_download_cert_tasks', (object) [
+$DB->update_record('block_download_certificates_tasks', (object) [
     'id' => $task->id,
     'status' => 'expired',
     'timemodified' => time(),

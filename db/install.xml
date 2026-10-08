@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="blocks/download_certificates/db" VERSION="20260309" COMMENT="XMLDB file for Moodle blocks/download_certificates">
+<XMLDB PATH="blocks/download_certificates/db" VERSION="20261007" COMMENT="XMLDB file for Moodle blocks/download_certificates">
   <TABLES>
-    <TABLE NAME="block_download_cert_tasks" COMMENT="Tracks async certificate download tasks">
+    <TABLE NAME="block_download_certificates_tasks" COMMENT="Tracks async certificate download tasks">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="User who requested the download"/>
