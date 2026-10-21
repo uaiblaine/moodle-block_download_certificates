@@ -148,7 +148,8 @@ final class templates_test extends \advanced_testcase {
         $page = new \moodle_page();
         $page->set_context(\context_user::instance($USER->id));
         $page->set_pagetype('my-index');
-        $block = block_content::for_page($page, (int) $USER->id, $repository)->export_for_template($OUTPUT);
+        $block = block_content::for_page($page, (int) $USER->id, $repository)
+            ->export_for_template($page->get_renderer('core'));
         $html['block_content'] = $this->render('block_content', $block);
         $html['block_manager'] = $this->render('block_manager', $block['manager']);
 
@@ -157,7 +158,8 @@ final class templates_test extends \advanced_testcase {
         $page = new \moodle_page();
         $page->set_context(\context_user::instance($USER->id));
         $page->set_pagetype('user-profile');
-        $profile = block_content::for_page($page, (int) $USER->id, $repository)->export_for_template($OUTPUT);
+        $profile = block_content::for_page($page, (int) $USER->id, $repository)
+            ->export_for_template($page->get_renderer('core'));
         $html['block_personal'] = $this->render('block_personal', $profile['personal']);
         $this->setUser($this->manager);
 
@@ -206,7 +208,8 @@ final class templates_test extends \advanced_testcase {
         $page = new \moodle_page();
         $page->set_course($this->coursea);
         $page->set_pagetype('course-view-topics');
-        $teacherblock = block_content::for_page($page, (int) $USER->id, $repository)->export_for_template($OUTPUT);
+        $teacherblock = block_content::for_page($page, (int) $USER->id, $repository)
+            ->export_for_template($page->get_renderer('core'));
         $html['block_teacher'] = $this->render('block_teacher', $teacherblock['teacher']);
 
         $html['@teacher_block'] = $this->render('block_content', $teacherblock);
@@ -416,6 +419,125 @@ final class templates_test extends \advanced_testcase {
                 (string) $this->coursea->id,
                 $xpath->query('.//input[@name="courseid"]', $form)->item(0)->getAttribute('value')
             );
+        }
+    }
+
+    /**
+     * A template, course and cohort name with `&`, `<` and `"` reach the block's list, its link label,
+     * the manager page's menus and the table rows escaped exactly once: the markup holds the entity
+     * the character needs, never an entity of an entity, and the parsed text is the name as typed.
+     *
+     * The control: the plain-named certificate of the same user renders unchanged beside it.
+     */
+    public function test_names_are_escaped_exactly_once(): void {
+        global $CFG, $OUTPUT, $USER;
+        require_once($CFG->dirroot . '/cohort/lib.php');
+
+        if (!(new tool_certificate())->is_available()) {
+            $this->markTestSkipped('tool_certificate is not installed.');
+        }
+        $tricky = 'Tom & Jerry "Gold"';
+        // Format_string() strips anything that reads as a tag, so the course carries the characters
+        // it keeps: an ampersand and double quotes.
+        $course = 'Algebra & "Co"';
+        $cohortname = 'Cohort "Tom" & Co';
+
+        $gen = $this->getDataGenerator();
+        $coursea = $gen->create_course(['fullname' => $course]);
+        $courseb = $gen->create_course(['fullname' => 'Botany']);
+        $ada = $gen->create_user();
+        $manager = $gen->create_user();
+        $gen->enrol_user($ada->id, $coursea->id, 'student');
+        $gen->enrol_user($ada->id, $courseb->id, 'student');
+        $gen->role_assign('manager', $manager->id);
+        $cohort = $gen->create_cohort(['name' => $cohortname]);
+        cohort_add_member($cohort->id, $ada->id);
+
+        $now = time();
+        $trickyid = issue_factory::tool_certificate_template($tricky)->get_id();
+        $plainid = issue_factory::tool_certificate_template('Silver')->get_id();
+        issue_factory::tool_certificate_issue($trickyid, (int) $ada->id, (int) $coursea->id, $now, 'T1');
+        issue_factory::tool_certificate_issue($plainid, (int) $ada->id, (int) $courseb->id, $now - 100, 'S1');
+        $repository = new repository();
+
+        // The block's list, on the learner's own profile: the link, its label, the course line.
+        $this->setUser($ada);
+        $page = new \moodle_page();
+        $page->set_context(\context_user::instance($USER->id));
+        $page->set_pagetype('user-profile');
+        $block = block_content::for_page($page, (int) $USER->id, $repository)
+            ->export_for_template($page->get_renderer('core'));
+        $personal = $this->render('block_personal', $block['personal']);
+        $xpath = $this->dom($personal);
+        $link = $xpath->query('//li[.//span[contains(., "Algebra")]]/a')->item(0);
+        $this->assertNotNull($link);
+        $this->assertSame('Download ' . $tricky, $link->getAttribute('aria-label'));
+        $this->assertSame($tricky, trim($link->textContent));
+        $this->assertSame($course, trim($xpath->query('//li[.//span[contains(., "Algebra")]]/span[1]')->item(0)->textContent));
+        $this->assert_escaped_once($personal);
+        $this->assertStringContainsString('aria-label="Download Tom &amp; Jerry &quot;Gold&quot;"', $personal);
+
+        // The control: the plain certificate of the same list is untouched.
+        $silver = $xpath->query('//li[.//span[contains(., "Botany")]]/a')->item(0);
+        $this->assertSame('Download Silver', $silver->getAttribute('aria-label'));
+        $this->assertSame('Silver', trim($silver->textContent));
+
+        // The manager page's menus.
+        $this->setUser($manager);
+        $main = panel_page::manager(scope::for_user((int) $USER->id), $repository);
+        $page = $this->render('main_page', $main);
+        $xpath = $this->dom($page);
+        $courseoption = $xpath->query('//select[@id="course_select"]/option[@value="' . $coursea->id . '"]')->item(0);
+        $this->assertStringStartsWith($course, trim($courseoption->textContent));
+        $cohortoption = $xpath->query('//select[@id="cohort_select"]/option[@value="' . $cohort->id . '"]')->item(0);
+        $this->assertStringStartsWith($cohortname, trim($cohortoption->textContent));
+        $this->assertStringContainsString('Algebra &amp; &quot;Co&quot;', $page);
+        $this->assertStringContainsString('Cohort &quot;Tom&quot; &amp; Co', $page);
+        $this->assert_escaped_once($page);
+        $botany = $xpath->query('//select[@id="course_select"]/option[@value="' . $courseb->id . '"]')->item(0);
+        $this->assertStringStartsWith('Botany (', trim($botany->textContent));
+
+        // The table rows, as the search web service hands them to certificate_table.js.
+        $result = request::search_page(
+            scope::for_user((int) $USER->id),
+            new filter(),
+            0,
+            10,
+            'timecreated',
+            'DESC',
+            $repository
+        );
+        $columns = [];
+        foreach (['firstname', 'email', 'coursename', 'templatename', 'type', 'timecreated'] as $key) {
+            $columns[$key] = ['ariasort' => 'none', 'icon' => 'fa-sort'];
+        }
+        $rows = $this->render('certificate_rows', [
+            'hasrows' => true,
+            'emptymessage' => '',
+            'columns' => $columns,
+            'rows' => $result['rows'],
+            'pagination' => ['haspages' => false],
+        ]);
+        $cells = array_map(
+            static fn(\DOMNode $node): string => trim($node->textContent),
+            iterator_to_array($this->dom($rows)->query('//td'))
+        );
+        $this->assertContains($tricky, $cells);
+        $this->assertContains($course, $cells);
+        $this->assertContains('Silver', $cells);
+        $this->assertStringContainsString('Tom &amp; Jerry &quot;Gold&quot;', $rows);
+        $this->assert_escaped_once($rows);
+    }
+
+    /**
+     * What escaping the names of {@see self::test_names_are_escaped_exactly_once()} twice, or not at
+     * all, would leave in the markup.
+     *
+     * @param string $html The markup.
+     */
+    private function assert_escaped_once(string $html): void {
+        foreach (['&amp;amp;', '&amp;quot;', '&amp;lt;', '&amp;gt;', '&amp;#'] as $wrong) {
+            $this->assertStringNotContainsString($wrong, $html);
         }
     }
 

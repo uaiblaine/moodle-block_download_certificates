@@ -38,6 +38,9 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
   the markup, the modules and the stylesheet (Bootstrap names, data-API attributes, inline styles
   and handlers, selector qualification, colour tokens, reduced motion). New strings for the search
   field, the per-page menu, the block's course and profile sections and the certificate list.
+- Stage 4: Behat smoke tests (the manager and teacher pages, the Dashboard block) with a step that
+  issues tool_certificate rows without PDFs, and a test that template, course and cohort names with
+  `&`, `<` and `"` are escaped exactly once in the block, the menus and the table rows.
 
 ### Changed
 
