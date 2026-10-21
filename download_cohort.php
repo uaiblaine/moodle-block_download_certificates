@@ -24,51 +24,31 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_download_certificates\local\download;
+use block_download_certificates\local\filter;
+use block_download_certificates\local\request;
+use block_download_certificates\local\scope;
+
 require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
 
-require_login();
+require_login(null, false);
+request::reject_guest();
+require_sesskey();
 
-$context = context_system::instance();
-require_capability('block/download_certificates:manage', $context);
-
-// Get parameters.
 $action = required_param('action', PARAM_ALPHANUMEXT);
 $cohortid = required_param('cohortid', PARAM_INT);
 
-// Verify sesskey.
-require_sesskey();
+$PAGE->set_context(context_system::instance());
+$PAGE->set_url('/blocks/download_certificates/download_cohort.php');
 
-if ($action !== 'download_cohort') {
-    throw new moodle_exception('invalidaction', 'block_download_certificates');
-}
-
-if (empty($cohortid)) {
-    redirect(
-        new moodle_url('/blocks/download_certificates/index.php'),
-        get_string('cohortnotselected', 'block_download_certificates'),
-        null,
-        \core\output\notification::NOTIFY_ERROR
-    );
-}
-
+$scope = scope::for_user((int) $USER->id);
 try {
-    // Create controller instance.
-    $controller = new block_download_certificates_controller();
-
-    // Download certificates for cohort members.
-    $controller->download_cohort_certificates($cohortid);
-} catch (Exception $e) {
-    // Log the error.
-    debugging('Cohort certificate download error: ' . $e->getMessage());
-
-    // Show error page.
-    $PAGE->set_context($context);
-    $PAGE->set_url('/blocks/download_certificates/download_cohort.php');
-    $PAGE->set_title(get_string('error'));
-
-    echo $OUTPUT->header();
-    echo $OUTPUT->notification($e->getMessage(), 'error');
-    echo $OUTPUT->continue_button(new moodle_url('/blocks/download_certificates/index.php'));
-    echo $OUTPUT->footer();
+    if ($action !== 'download_cohort') {
+        throw new moodle_exception('invalidaction', 'block_download_certificates');
+    }
+    $filter = filter::from_array(['cohortid' => $cohortid]);
+    request::check_zip($scope, 'cohort', $filter);
+    download::send_zip($scope, $filter, request::zip_filename('cohort', $filter));
+} catch (moodle_exception $e) {
+    request::redirect_on_error($scope, $e);
 }

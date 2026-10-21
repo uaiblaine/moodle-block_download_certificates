@@ -24,13 +24,21 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
+use block_download_certificates\local\download;
+use block_download_certificates\local\filter;
+use block_download_certificates\local\repository;
+use block_download_certificates\local\request;
+use block_download_certificates\local\scope;
+use block_download_certificates\local\zip_tasks;
 
-require_login();
+require_once(__DIR__ . '/../../config.php');
+
+require_login(null, false);
+request::reject_guest();
 
 $context = context_system::instance();
 require_capability('block/download_certificates:manage', $context);
+$scope = scope::for_user((int) $USER->id);
 
 $PAGE->set_context($context);
 $PAGE->set_url('/blocks/download_certificates/index.php');
@@ -38,21 +46,43 @@ $PAGE->set_title(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_heading(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_pagelayout('admin');
 
-// Initialize controller.
-$controller = new block_download_certificates_controller();
+$repository = new repository();
+$totalcount = $repository->count($scope, new filter());
 
-// Get certificates data for display.
-$data = $controller->get_certificates_data();
+$courses = [];
+foreach ($repository->get_courses($scope) as $course) {
+    $courses[] = ['id' => $course->id, 'fullname' => $course->name, 'certificate_count' => $course->total];
+}
+$users = [];
+foreach ($repository->get_users($scope) as $user) {
+    $users[] = ['id' => $user->id, 'fullname' => $user->fullname, 'certificate_count' => $user->total];
+}
+$cohorts = [];
+foreach ($repository->get_cohorts($scope) as $cohort) {
+    $cohorts[] = ['id' => $cohort->id, 'name' => $cohort->name, 'certificate_count' => $cohort->total];
+}
 
-// Get courses with certificates for the dropdown.
-$courses = $controller->get_courses_with_certificates();
-$data['courses'] = $courses;
-$data['has_courses'] = !empty($courses);
-
-// Get users with certificates for the dropdown.
-$users = $controller->get_users_with_certificates();
-$data['users'] = $users;
-$data['has_users'] = !empty($users);
+$data = [
+    'total_count' => $totalcount,
+    'download_all_url' => new moodle_url('/blocks/download_certificates/download.php', [
+        'action' => 'download_all',
+        'sesskey' => sesskey(),
+    ]),
+    'download_range_url' => new moodle_url('/blocks/download_certificates/download_range.php'),
+    'download_course_url' => new moodle_url('/blocks/download_certificates/download_course.php'),
+    'download_cohort_url' => new moodle_url('/blocks/download_certificates/download_cohort.php'),
+    'download_user_url' => new moodle_url('/blocks/download_certificates/download_user.php'),
+    'has_certificates' => $totalcount > 0,
+    'courses' => $courses,
+    'has_courses' => !empty($courses),
+    'users' => $users,
+    'has_users' => !empty($users),
+    'cohorts' => $cohorts,
+    'has_cohorts' => !empty($cohorts),
+    'sesskey' => sesskey(),
+    'async_threshold' => download::SYNC_LIMIT,
+    'pending_tasks' => zip_tasks::get_pending((int) $USER->id),
+];
 $PAGE->requires->css('/blocks/download_certificates/styles.css');
 
 // Initialize certificate table JS module (dynamic AJAX table).

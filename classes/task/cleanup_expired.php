@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Scheduled task to clean up expired certificate download tasks.
+ * Scheduled task that removes old background ZIP downloads.
  *
  * @package   block_download_certificates
  * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
@@ -25,15 +25,34 @@
 
 namespace block_download_certificates\task;
 
+use block_download_certificates\local\task_storage;
+use block_download_certificates\local\zip_tasks;
+
 /**
- * Scheduled task that cleans up expired ZIP files and task records.
+ * Removes old background ZIP downloads, hourly.
  *
- * Runs every hour. Deletes:
- * - Ready tasks older than 24 hours (and their ZIP files)
- * - Failed tasks older than 7 days
- * - Stuck processing tasks older than 2 hours
+ * - A pending or processing row untouched for {@see self::STUCK_AFTER} fails.
+ * - A ready row untouched for {@see self::READY_FOR} expires.
+ * - A row older than {@see self::KEEP_FOR} is deleted.
+ * Every row it fails, expires or deletes loses its task directory, and so does any failed or expired
+ * row that still has one. Files are only ever removed through {@see task_storage}, which knows no
+ * path outside the plugin's task directories; the rows' `filepath` column is never read.
+ *
+ * @package   block_download_certificates
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class cleanup_expired extends \core\task\scheduled_task {
+    /** @var int Seconds after which an unfinished row counts as stuck. */
+    public const STUCK_AFTER = 2 * HOURSECS;
+
+    /** @var int Seconds a ready archive stays downloadable. */
+    public const READY_FOR = DAYSECS;
+
+    /** @var int Seconds a row is kept. */
+    public const KEEP_FOR = 7 * DAYSECS;
+
     /**
      * Get the task name.
      *
@@ -44,91 +63,60 @@ class cleanup_expired extends \core\task\scheduled_task {
     }
 
     /**
-     * Execute the cleanup task.
+     * Fail stuck rows, expire old archives, delete old rows, each with its directory.
+     *
+     * @return void
      */
     public function execute() {
         global $DB;
 
         $now = time();
-        $cleaned = 0;
+        $table = zip_tasks::TABLE;
 
-        // 1. Clean up ready tasks older than 24 hours.
-        $expirytime = $now - (24 * 3600);
-        $expiredtasks = $DB->get_records_select(
-            'block_download_certificates_tasks',
-            "status = 'ready' AND timecreated < ?",
-            [$expirytime]
+        $stuck = $DB->get_fieldset_select(
+            $table,
+            'id',
+            'status IN (:pending, :processing) AND timemodified < :before',
+            [
+                'pending' => zip_tasks::STATUS_PENDING,
+                'processing' => zip_tasks::STATUS_PROCESSING,
+                'before' => $now - self::STUCK_AFTER,
+            ]
         );
-
-        foreach ($expiredtasks as $task) {
-            // Delete the ZIP file if it exists.
-            if (!empty($task->filepath) && file_exists($task->filepath)) {
-                unlink($task->filepath);
-                mtrace("Deleted expired ZIP: {$task->filepath}");
-            }
-            $DB->delete_records('block_download_certificates_tasks', ['id' => $task->id]);
-            $cleaned++;
+        foreach ($stuck as $taskid) {
+            zip_tasks::fail((int) $taskid, 'taskerror_timeout');
         }
 
-        // 2. Clean up failed tasks older than 7 days.
-        $failedexpiry = $now - (7 * 24 * 3600);
-        $failedcount = $DB->count_records_select(
-            'block_download_certificates_tasks',
-            "status = 'failed' AND timecreated < ?",
-            [$failedexpiry]
+        $old = $DB->get_fieldset_select(
+            $table,
+            'id',
+            'status = :ready AND timemodified < :before',
+            ['ready' => zip_tasks::STATUS_READY, 'before' => $now - self::READY_FOR]
         );
-        if ($failedcount > 0) {
-            $DB->delete_records_select(
-                'block_download_certificates_tasks',
-                "status = 'failed' AND timecreated < ?",
-                [$failedexpiry]
-            );
-            $cleaned += $failedcount;
+        foreach ($old as $taskid) {
+            zip_tasks::expire((int) $taskid);
         }
 
-        // 3. Clean up stuck processing tasks older than 2 hours.
-        $stuckexpiry = $now - (2 * 3600);
-        $stucktasks = $DB->get_records_select(
-            'block_download_certificates_tasks',
-            "status = 'processing' AND timemodified < ?",
-            [$stuckexpiry]
+        $finished = $DB->get_fieldset_select(
+            $table,
+            'id',
+            'status IN (:failed, :expired)',
+            ['failed' => zip_tasks::STATUS_FAILED, 'expired' => zip_tasks::STATUS_EXPIRED]
         );
-
-        foreach ($stucktasks as $task) {
-            $DB->update_record('block_download_certificates_tasks', (object) [
-                'id' => $task->id,
-                'status' => 'failed',
-                'error' => 'Task timed out (stuck for more than 2 hours)',
-                'timemodified' => $now,
-            ]);
-            $cleaned++;
+        foreach ($finished as $taskid) {
+            task_storage::delete((int) $taskid);
         }
 
-        // 4. Clean up expired tasks.
-        $expiredcount = $DB->count_records_select(
-            'block_download_certificates_tasks',
-            "status = 'expired'"
-        );
-        if ($expiredcount > 0) {
-            // Delete ZIP files for expired tasks first.
-            $expiredrecords = $DB->get_records_select(
-                'block_download_certificates_tasks',
-                "status = 'expired'"
-            );
-            foreach ($expiredrecords as $task) {
-                if (!empty($task->filepath) && file_exists($task->filepath)) {
-                    unlink($task->filepath);
-                }
-            }
-            $DB->delete_records_select(
-                'block_download_certificates_tasks',
-                "status = 'expired'"
-            );
-            $cleaned += $expiredcount;
+        $deleted = $DB->get_fieldset_select($table, 'id', 'timecreated < :before', ['before' => $now - self::KEEP_FOR]);
+        foreach ($deleted as $taskid) {
+            task_storage::delete((int) $taskid);
+            $DB->delete_records($table, ['id' => $taskid]);
         }
 
-        if ($cleaned > 0) {
-            mtrace("Cleaned up {$cleaned} expired/failed certificate download tasks.");
+        $count = count($stuck) + count($old) + count($deleted);
+        if ($count > 0) {
+            mtrace('Certificate ZIP downloads: ' . count($stuck) . ' failed, ' . count($old) . ' expired, '
+                . count($deleted) . ' deleted.');
         }
     }
 }

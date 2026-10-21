@@ -26,6 +26,7 @@
 
 namespace block_download_certificates\privacy;
 
+use block_download_certificates\local\task_storage;
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
@@ -148,7 +149,7 @@ class provider implements
         if ($context->contextlevel !== CONTEXT_USER) {
             return;
         }
-        self::delete_tasks(['userid' => $context->instanceid]);
+        self::delete_tasks((int) $context->instanceid);
     }
 
     /**
@@ -161,7 +162,7 @@ class provider implements
         $user = $contextlist->get_user();
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel === CONTEXT_USER && (int) $context->instanceid === (int) $user->id) {
-                self::delete_tasks(['userid' => $user->id]);
+                self::delete_tasks((int) $user->id);
             }
         }
     }
@@ -179,45 +180,25 @@ class provider implements
         }
         // A user context holds the data of its owner only.
         if (in_array((int) $context->instanceid, array_map('intval', $userlist->get_userids()), true)) {
-            self::delete_tasks(['userid' => $context->instanceid]);
+            self::delete_tasks((int) $context->instanceid);
         }
     }
 
     /**
-     * Delete the matching rows and the ZIP file each one points to.
+     * Delete a user's rows and the task directory of each, where its ZIP lives.
      *
-     * @param array $conditions Field values selecting the rows.
+     * The directory follows from the row id; the stored `filepath` is data, not a trusted location,
+     * and is never deleted.
+     *
+     * @param int $userid The requester.
      * @return void
      */
-    private static function delete_tasks(array $conditions): void {
+    private static function delete_tasks(int $userid): void {
         global $DB;
 
-        $tasks = $DB->get_records(self::TABLE, $conditions, '', 'id, filepath');
-        foreach ($tasks as $task) {
-            self::unlink_if_owned((string) $task->filepath);
+        foreach ($DB->get_fieldset_select(self::TABLE, 'id', 'userid = :userid', ['userid' => $userid]) as $taskid) {
+            task_storage::delete((int) $taskid);
         }
-        $DB->delete_records(self::TABLE, $conditions);
-    }
-
-    /**
-     * Unlink a stored path, but only when it is a file inside the block's own temp directory.
-     *
-     * The column is data, not a trusted location, so a path outside the directory is left alone.
-     *
-     * @param string $filepath The stored path.
-     * @return void
-     */
-    private static function unlink_if_owned(string $filepath): void {
-        if ($filepath === '') {
-            return;
-        }
-        $base = realpath(make_temp_directory('block_download_certificates'));
-        $real = realpath($filepath);
-        if ($base === false || $real === false || !is_file($real)) {
-            return;
-        }
-        if (strpos($real, $base . DIRECTORY_SEPARATOR) === 0) {
-            unlink($real);
-        }
+        $DB->delete_records(self::TABLE, ['userid' => $userid]);
     }
 }

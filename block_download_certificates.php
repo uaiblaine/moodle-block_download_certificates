@@ -24,10 +24,10 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
+use block_download_certificates\local\filter;
+use block_download_certificates\local\repository;
+use block_download_certificates\local\scope;
+use block_download_certificates\local\zip_tasks;
 
 /**
  * Block download_certificates class.
@@ -59,6 +59,7 @@ class block_download_certificates extends block_base {
             'course-view' => true,
             'mod' => false,
             'my' => true,
+            'user-profile' => true,
         ];
     }
 
@@ -86,8 +87,6 @@ class block_download_certificates extends block_base {
      * @return stdClass
      */
     public function get_content() {
-        global $OUTPUT, $USER;
-
         if ($this->content !== null) {
             return $this->content;
         }
@@ -101,25 +100,18 @@ class block_download_certificates extends block_base {
             return $this->content;
         }
 
-        // Use system context for capability checks.
-        $context = context_system::instance();
-
         try {
-            // Vérification du niveau d'accès (gestionnaire > enseignant > apprenant).
-            $ismanager = has_capability('block/download_certificates:manage', $context);
-
-            if ($ismanager) {
-                // Interface complète pour les gestionnaires/administrateurs.
-                $this->content->text = $this->get_manager_content();
-            } else if ($this->user_is_teacher($USER->id)) {
-                // Interface filtrée pour les enseignants.
-                $this->content->text = $this->get_teacher_content();
+            $scope = $this->get_scope();
+            $repository = new repository();
+            if ($scope->is_manager()) {
+                $this->content->text = $this->get_manager_content($scope, $repository);
+            } else if ($scope->get_course_ids()) {
+                $this->content->text = $this->get_teacher_content($scope, $repository);
             } else {
-                // Interface simplifiée pour les apprenants.
-                $this->content->text = $this->get_learner_content();
+                $this->content->text = $this->get_learner_content($scope, $repository);
             }
-        } catch (Exception $e) {
-            // Error handling.
+        } catch (\Throwable $e) {
+            debugging('Download certificates block: ' . $e->getMessage(), DEBUG_DEVELOPER);
             $this->content->text = html_writer::div(
                 get_string('error_loading_block', 'block_download_certificates'),
                 'alert alert-danger'
@@ -130,17 +122,36 @@ class block_download_certificates extends block_base {
     }
 
     /**
+     * The viewer's scope, narrowed to the page the block stands on: a course page keeps that course,
+     * a user profile keeps that user.
+     *
+     * @return scope
+     */
+    private function get_scope(): scope {
+        global $USER;
+
+        $courseid = null;
+        if (!empty($this->page->course->id) && (int) $this->page->course->id !== (int) SITEID) {
+            $courseid = (int) $this->page->course->id;
+        }
+        // The dashboard stands in the viewer's user context too; only a profile page narrows.
+        $profileuserid = null;
+        if ($this->page->context->contextlevel == CONTEXT_USER && str_starts_with($this->page->pagetype, 'user-')) {
+            $profileuserid = (int) $this->page->context->instanceid;
+        }
+        return scope::for_user((int) $USER->id, $courseid, $profileuserid);
+    }
+
+    /**
      * Get content for managers (admin interface).
      *
+     * @param scope $scope The viewer's scope.
+     * @param repository $repository The certificate repository.
      * @return string
      */
-    private function get_manager_content() {
+    private function get_manager_content(scope $scope, repository $repository) {
         try {
-            // Initialize controller.
-            $controller = new block_download_certificates_controller();
-
-            // Get quick stats for the block.
-            $stats = $this->get_certificate_stats($controller);
+            $stats = $this->get_certificate_stats($scope, $repository);
 
             // Create content.
             $content = '';
@@ -215,7 +226,7 @@ class block_download_certificates extends block_base {
                 // Load async download JS module for the block.
                 $jsconfig = [
                     'sesskey' => sesskey(),
-                    'pending_tasks' => $controller->get_pending_tasks(),
+                    'pending_tasks' => zip_tasks::get_pending($scope->get_user_id()),
                 ];
                 $this->page->requires->js_call_amd('block_download_certificates/async_download', 'init', [$jsconfig]);
 
@@ -241,10 +252,10 @@ class block_download_certificates extends block_base {
             $content .= html_writer::end_div(); // Actions.
 
             // Add personal certificates section for managers.
-            $content .= $this->get_manager_personal_section();
+            $content .= $this->get_manager_personal_section($scope, $repository);
 
             return $content;
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // Error handling.
             return html_writer::div(
                 get_string('error_loading_block', 'block_download_certificates'),
@@ -256,17 +267,13 @@ class block_download_certificates extends block_base {
     /**
      * Get content for learners (simplified interface).
      *
+     * @param scope $scope The viewer's scope.
+     * @param repository $repository The certificate repository.
      * @return string
      */
-    private function get_learner_content() {
-        global $USER;
-
+    private function get_learner_content(scope $scope, repository $repository) {
         try {
-            // Initialize controller.
-            $controller = new block_download_certificates_controller();
-
-            // Get user's certificate count.
-            $usercertcount = $this->get_user_certificate_count($USER->id);
+            $usercertcount = $this->get_own_count($scope, $repository);
 
             // Create content.
             $content = '';
@@ -300,7 +307,7 @@ class block_download_certificates extends block_base {
             }
 
             return $content;
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // Error handling.
             return html_writer::div(
                 get_string('error_loading_block', 'block_download_certificates'),
@@ -310,207 +317,41 @@ class block_download_certificates extends block_base {
     }
 
     /**
-     * Get the number of certificates for a specific user.
+     * The viewer's own certificates within the scope.
      *
-     * @param int $userid User ID
-     * @return int Number of certificates
+     * @param scope $scope The viewer's scope.
+     * @param repository $repository The certificate repository.
+     * @return int
      */
-    private function get_user_certificate_count($userid) {
-        global $DB;
-
-        try {
-            // Count tool_certificate certificates.
-            $toolcertcount = 0;
-            $dbman = $DB->get_manager();
-            if ($dbman->table_exists('tool_certificate_issues')) {
-                $toolcertcount = $DB->count_records('tool_certificate_issues', ['userid' => $userid]);
-            }
-
-            // Count customcert certificates.
-            $customcertcount = 0;
-            if ($dbman->table_exists('customcert_issues')) {
-                $customcertcount = $DB->count_records('customcert_issues', ['userid' => $userid]);
-            }
-
-            // Count mod_certificate certificates.
-            $modcertcount = 0;
-            if ($dbman->table_exists('certificate_issues')) {
-                $modcertcount = $DB->count_records('certificate_issues', ['userid' => $userid]);
-            }
-
-            // Count mod_simplecertificate certificates.
-            $simplecertcount = 0;
-            if ($dbman->table_exists('simplecertificate_issues')) {
-                $simplecertcount = $DB->count_records_select(
-                    'simplecertificate_issues',
-                    'userid = ? AND (timedeleted IS NULL OR timedeleted = 0)',
-                    [$userid]
-                );
-            }
-
-            // Count mod_certificatebeautiful certificates.
-            $certificatebeautifulcount = 0;
-            if ($dbman->table_exists('certificatebeautiful_issue')) {
-                $certificatebeautifulcount = $DB->count_records('certificatebeautiful_issue', ['userid' => $userid]);
-            }
-
-            return $toolcertcount + $customcertcount + $modcertcount + $simplecertcount + $certificatebeautifulcount;
-        } catch (Exception $e) {
-            debugging('Error getting user certificate count: ' . $e->getMessage());
-            return 0;
-        }
+    private function get_own_count(scope $scope, repository $repository): int {
+        return $repository->count($scope, new filter(userid: $scope->get_user_id()));
     }
 
     /**
-     * Get certificate statistics for the block display.
+     * The manager summary: certificates, courses holding them, certificates of the last 7 days.
      *
-     * @param block_download_certificates_controller $controller
-     * @return array
+     * @param scope $scope The viewer's scope.
+     * @param repository $repository The certificate repository.
+     * @return array total, courses, recent.
      */
-    private function get_certificate_stats($controller) {
-        global $DB;
-
-        $stats = [
-            'total' => 0,
-            'courses' => 0,
-            'recent' => 0,
+    private function get_certificate_stats(scope $scope, repository $repository): array {
+        return [
+            'total' => $repository->count($scope, new filter()),
+            'courses' => count($repository->get_courses($scope)),
+            'recent' => $repository->count($scope, new filter(datefrom: time() - 7 * DAYSECS)),
         ];
-
-        try {
-            $dbman = $DB->get_manager();
-
-            // Total certificates from all sources.
-            $toolcerttotal = 0;
-            $customcerttotal = 0;
-            $modcerttotal = 0;
-            $simplecerttotal = 0;
-            $certificatebeautifultotal = 0;
-
-            if ($dbman->table_exists('tool_certificate_issues')) {
-                $toolcerttotal = $DB->count_records('tool_certificate_issues');
-            }
-
-            if ($dbman->table_exists('customcert_issues')) {
-                $customcerttotal = $DB->count_records('customcert_issues');
-            }
-
-            if ($dbman->table_exists('certificate_issues')) {
-                $modcerttotal = $DB->count_records('certificate_issues');
-            }
-
-            if ($dbman->table_exists('simplecertificate_issues')) {
-                $simplecerttotal = $DB->count_records_select(
-                    'simplecertificate_issues',
-                    'timedeleted IS NULL OR timedeleted = 0'
-                );
-            }
-
-            if ($dbman->table_exists('certificatebeautiful_issue')) {
-                $certificatebeautifultotal = $DB->count_records('certificatebeautiful_issue');
-            }
-
-            $stats['total'] = $toolcerttotal + $customcerttotal + $modcerttotal + $simplecerttotal + $certificatebeautifultotal;
-
-            // Number of unique courses with certificates from all sources.
-            // Use UNION to get all unique course IDs that have any type of certificate.
-            $courseids = [];
-
-            if ($dbman->table_exists('tool_certificate_issues')) {
-                $sql1 = "SELECT DISTINCT courseid as course_id FROM {tool_certificate_issues} WHERE courseid > 1";
-                $toolcourseids = $DB->get_fieldset_sql($sql1);
-                $courseids = array_merge($courseids, $toolcourseids);
-            }
-
-            if ($dbman->table_exists('customcert_issues') && $dbman->table_exists('customcert')) {
-                $sql2 = "SELECT DISTINCT c.course as course_id FROM {customcert_issues} ci
-                         JOIN {customcert} c ON c.id = ci.customcertid WHERE c.course > 1";
-                $customcourseids = $DB->get_fieldset_sql($sql2);
-                $courseids = array_merge($courseids, $customcourseids);
-            }
-
-            if ($dbman->table_exists('certificate_issues') && $dbman->table_exists('certificate')) {
-                $sql3 = "SELECT DISTINCT c.course as course_id FROM {certificate_issues} ci
-                         JOIN {certificate} c ON c.id = ci.certificateid WHERE c.course > 1";
-                $modcourseids = $DB->get_fieldset_sql($sql3);
-                $courseids = array_merge($courseids, $modcourseids);
-            }
-
-            if ($dbman->table_exists('simplecertificate_issues')) {
-                $sql4 = "SELECT DISTINCT c.id as course_id FROM {simplecertificate_issues} si
-                         JOIN {course} c ON (c.shortname = si.coursename OR c.fullname = si.coursename)
-                         WHERE c.id > 1 AND (si.timedeleted IS NULL OR si.timedeleted = 0)";
-                $simplecourseids = $DB->get_fieldset_sql($sql4);
-                $courseids = array_merge($courseids, $simplecourseids);
-            }
-
-            if ($dbman->table_exists('certificatebeautiful_issue') && $dbman->table_exists('course_modules')) {
-                $sql5 = "SELECT DISTINCT c.id as course_id FROM {certificatebeautiful_issue} cbi
-                         JOIN {course_modules} cm ON cm.id = cbi.cmid
-                         JOIN {course} c ON c.id = cm.course
-                         WHERE c.id > 1";
-                $certificatebeautifulcourseids = $DB->get_fieldset_sql($sql5);
-                $courseids = array_merge($courseids, $certificatebeautifulcourseids);
-            }
-
-            // Count unique courses.
-            $stats['courses'] = count(array_unique($courseids));
-
-            // Recent certificates (last 7 days) from all sources.
-            $weekago = time() - (7 * 24 * 60 * 60);
-            $toolrecent = 0;
-            $customrecent = 0;
-            $modrecent = 0;
-            $simplerecent = 0;
-            $certificatebeautifulrecent = 0;
-
-            if ($dbman->table_exists('tool_certificate_issues')) {
-                $toolrecent = $DB->count_records_select('tool_certificate_issues', 'timecreated >= ?', [$weekago]);
-            }
-
-            if ($dbman->table_exists('customcert_issues')) {
-                $customrecent = $DB->count_records_select('customcert_issues', 'timecreated >= ?', [$weekago]);
-            }
-
-            if ($dbman->table_exists('certificate_issues')) {
-                $modrecent = $DB->count_records_select('certificate_issues', 'timecreated >= ?', [$weekago]);
-            }
-
-            if ($dbman->table_exists('simplecertificate_issues')) {
-                $simplerecent = $DB->count_records_select(
-                    'simplecertificate_issues',
-                    'timecreated >= ? AND (timedeleted IS NULL OR timedeleted = 0)',
-                    [$weekago]
-                );
-            }
-
-            if ($dbman->table_exists('certificatebeautiful_issue')) {
-                $certificatebeautifulrecent = $DB->count_records_select(
-                    'certificatebeautiful_issue',
-                    'timecreated >= ?',
-                    [$weekago]
-                );
-            }
-
-            $stats['recent'] = $toolrecent + $customrecent + $modrecent + $simplerecent + $certificatebeautifulrecent;
-        } catch (Exception $e) {
-            // If there's an error, return zeros.
-            debugging('Error getting certificate stats: ' . $e->getMessage());
-        }
-
-        return $stats;
     }
 
     /**
      * Get personal certificates section for managers.
      *
+     * @param scope $scope The viewer's scope.
+     * @param repository $repository The certificate repository.
      * @return string
      */
-    private function get_manager_personal_section() {
-        global $USER;
-
+    private function get_manager_personal_section(scope $scope, repository $repository) {
         try {
-            // Get user's certificate count.
-            $usercertcount = $this->get_user_certificate_count($USER->id);
+            $usercertcount = $this->get_own_count($scope, $repository);
 
             // Create personal section.
             $content = '';
@@ -557,7 +398,7 @@ class block_download_certificates extends block_base {
             $content .= html_writer::end_div(); // Manager-personal-certificates.
 
             return $content;
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // Error handling - return empty string on error.
             debugging('Error loading manager personal section: ' . $e->getMessage());
             return '';
@@ -565,42 +406,20 @@ class block_download_certificates extends block_base {
     }
 
     /**
-     * Détermine si un utilisateur est enseignant dans au moins un cours.
+     * Content for a user with courses of their own: the certificates in scope and a link to the
+     * teacher page.
      *
-     * Délègue à block_download_certificates_access::is_teacher().
-     *
-     * @param int $userid ID de l'utilisateur
-     * @return bool
+     * @param scope $scope The viewer's scope.
+     * @param repository $repository The certificate repository.
+     * @return string HTML of the block content
      */
-    private function user_is_teacher(int $userid): bool {
-        $access = new block_download_certificates_access();
-        return $access->is_teacher($userid);
-    }
-
-    /**
-     * Contenu du bloc pour les enseignants.
-     *
-     * Affiche le nombre de certificats dans le périmètre de l'enseignant
-     * et un lien vers la page enseignant (index_teacher.php).
-     *
-     * @return string HTML du contenu du bloc
-     */
-    private function get_teacher_content(): string {
-        global $USER;
-
+    private function get_teacher_content(scope $scope, repository $repository): string {
         try {
-            $access = new block_download_certificates_access();
-            $scope = $access->get_teacher_visible_user_ids($USER->id);
-            $courseids = array_keys($scope);
-
-            // Compter les certificats dans le périmètre de l'enseignant.
-            require_once($GLOBALS['CFG']->dirroot . '/blocks/download_certificates/classes/certificate_query.php');
-            $query = new block_download_certificates_query();
-            $totalcount = $query->count_search_results_for_teacher($scope);
+            $totalcount = $repository->count($scope, new filter());
 
             $content = '';
 
-            // Affichage du nombre de certificats.
+            // Certificate count.
             $content .= html_writer::start_div('certificate-stats mb-3 text-center');
             $content .= html_writer::tag('div', $totalcount, ['class' => 'h4 mb-0 text-primary']);
             $content .= html_writer::tag(
@@ -610,7 +429,7 @@ class block_download_certificates extends block_base {
             );
             $content .= html_writer::end_div();
 
-            // Lien vers la page enseignant.
+            // Link to the teacher page.
             $manageurl = new moodle_url('/blocks/download_certificates/index_teacher.php');
             $content .= html_writer::link(
                 $manageurl,
@@ -618,11 +437,11 @@ class block_download_certificates extends block_base {
                 ['class' => 'btn btn-primary btn-sm d-block mb-2']
             );
 
-            // Section certificats personnels (comme pour le gestionnaire).
-            $content .= $this->get_manager_personal_section();
+            // The personal section, as for managers.
+            $content .= $this->get_manager_personal_section($scope, $repository);
 
             return $content;
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             return html_writer::div(
                 get_string('error_loading_block', 'block_download_certificates'),
                 'alert alert-danger'

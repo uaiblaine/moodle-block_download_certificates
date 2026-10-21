@@ -191,8 +191,8 @@
                                 class="form-control w-100" required>
                             <option value="">{{#str}}choose_cohort, block_download_certificates{{/str}}</option>
                             {{#cohorts}}
-                            <option value="{{id}}" data-count="{{member_count}}">
-                                {{name}} ({{member_count}} {{#str}}members, block_download_certificates{{/str}})
+                            <option value="{{id}}" data-count="{{certificate_count}}">
+                                {{name}} ({{certificate_count}} {{#str}}certificates, block_download_certificates{{/str}})
                             </option>
                             {{/cohorts}}
                         </select>

@@ -25,44 +25,18 @@
 
 define('AJAX_SCRIPT', true);
 
+use block_download_certificates\local\request;
+use block_download_certificates\local\zip_tasks;
+
 require_once(__DIR__ . '/../../../config.php');
 
-require_login();
+require_login(null, false);
+request::reject_guest();
 
 $taskid = required_param('taskid', PARAM_INT);
 
-$task = $DB->get_record('block_download_certificates_tasks', ['id' => $taskid]);
-
-if (!$task) {
-    echo json_encode(['success' => false, 'error' => 'Task not found']);
-    die();
+try {
+    request::send_json(zip_tasks::get_status($taskid, (int) $USER->id));
+} catch (Throwable $e) {
+    request::send_json(['success' => false, 'error' => request::error_message($e)]);
 }
-
-// Verify ownership.
-if ((int)$task->userid !== (int)$USER->id) {
-    echo json_encode(['success' => false, 'error' => 'Access denied']);
-    die();
-}
-
-$response = [
-    'success' => true,
-    'taskid' => (int) $task->id,
-    'status' => $task->status,
-    'progress' => (int) $task->progress,
-    'total' => (int) $task->total,
-];
-
-// Include download URL if ready.
-if ($task->status === 'ready') {
-    $response['download_url'] = (new moodle_url('/blocks/download_certificates/ajax/download_zip.php', [
-        'taskid' => $task->id,
-        'sesskey' => sesskey(),
-    ]))->out(false);
-}
-
-// Include error message if failed.
-if ($task->status === 'failed' && !empty($task->error)) {
-    $response['error_message'] = $task->error;
-}
-
-echo json_encode($response);

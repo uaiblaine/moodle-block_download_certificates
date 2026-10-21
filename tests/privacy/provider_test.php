@@ -25,6 +25,7 @@
 
 namespace block_download_certificates\privacy;
 
+use block_download_certificates\local\task_storage;
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
@@ -73,14 +74,17 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * Create a ZIP stand-in inside the block's temp directory.
+     * Create a ZIP stand-in in a task's own directory and point the row's filepath at it.
      *
-     * @param string $name The file name.
+     * @param int $taskid The task row.
      * @return string The absolute path.
      */
-    private function add_file(string $name): string {
-        $path = make_temp_directory('block_download_certificates/async') . '/' . $name;
+    private function add_file(int $taskid): string {
+        global $DB;
+
+        $path = task_storage::get_zip_path($taskid);
         file_put_contents($path, 'zip');
+        $DB->set_field(self::TABLE, 'filepath', $path, ['id' => $taskid]);
         return $path;
     }
 
@@ -185,10 +189,8 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->resetAfterTest();
         $user = $this->getDataGenerator()->create_user();
         $other = $this->getDataGenerator()->create_user();
-        $mine = $this->add_file('mine.zip');
-        $theirs = $this->add_file('theirs.zip');
-        $this->add_task((int) $user->id, $mine);
-        $this->add_task((int) $other->id, $theirs);
+        $mine = $this->add_file($this->add_task((int) $user->id));
+        $theirs = $this->add_file($this->add_task((int) $other->id));
 
         provider::delete_data_for_all_users_in_context(\context_user::instance($user->id));
 
@@ -196,7 +198,6 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertFileDoesNotExist($mine);
         $this->assertTrue($DB->record_exists(self::TABLE, ['userid' => $other->id]));
         $this->assertFileExists($theirs);
-        unlink($theirs);
     }
 
     /**
@@ -209,10 +210,8 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->resetAfterTest();
         $user = $this->getDataGenerator()->create_user();
         $other = $this->getDataGenerator()->create_user();
-        $mine = $this->add_file('mine.zip');
-        $theirs = $this->add_file('theirs.zip');
-        $this->add_task((int) $user->id, $mine);
-        $this->add_task((int) $other->id, $theirs);
+        $mine = $this->add_file($this->add_task((int) $user->id));
+        $theirs = $this->add_file($this->add_task((int) $other->id));
         $context = \context_user::instance($user->id);
 
         provider::delete_data_for_user(new approved_contextlist($user, 'block_download_certificates', [$context->id]));
@@ -221,7 +220,6 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertFileDoesNotExist($mine);
         $this->assertTrue($DB->record_exists(self::TABLE, ['userid' => $other->id]));
         $this->assertFileExists($theirs);
-        unlink($theirs);
     }
 
     /**
@@ -234,10 +232,8 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->resetAfterTest();
         $user = $this->getDataGenerator()->create_user();
         $other = $this->getDataGenerator()->create_user();
-        $mine = $this->add_file('mine.zip');
-        $theirs = $this->add_file('theirs.zip');
-        $this->add_task((int) $user->id, $mine);
-        $this->add_task((int) $other->id, $theirs);
+        $mine = $this->add_file($this->add_task((int) $user->id));
+        $theirs = $this->add_file($this->add_task((int) $other->id));
         $context = \context_user::instance($user->id);
 
         provider::delete_data_for_users(new approved_userlist($context, 'block_download_certificates', [(int) $user->id]));
@@ -246,25 +242,27 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertFileDoesNotExist($mine);
         $this->assertTrue($DB->record_exists(self::TABLE, ['userid' => $other->id]));
         $this->assertFileExists($theirs);
-        unlink($theirs);
     }
 
     /**
-     * A stored path outside the block's temp directory is never unlinked; the row still goes.
+     * A stored path outside the task directories is never unlinked, even inside the plugin's own temp
+     * directory; the row and its task directory still go.
      *
      * @return void
      */
-    public function test_a_path_outside_the_temp_directory_is_not_unlinked(): void {
+    public function test_a_path_outside_the_task_directories_is_not_unlinked(): void {
         global $DB;
         $this->resetAfterTest();
         $user = $this->getDataGenerator()->create_user();
-        $outside = make_temp_directory('block_download_certificates_other') . '/outside.zip';
+        $outside = make_temp_directory('block_download_certificates/async') . '/outside.zip';
         file_put_contents($outside, 'zip');
-        $this->add_task((int) $user->id, $outside);
+        $taskid = $this->add_task((int) $user->id, $outside);
+        $directory = task_storage::make_directory($taskid);
 
         provider::delete_data_for_all_users_in_context(\context_user::instance($user->id));
 
         $this->assertFalse($DB->record_exists(self::TABLE, ['userid' => $user->id]));
+        $this->assertDirectoryDoesNotExist($directory);
         $this->assertFileExists($outside);
         unlink($outside);
     }

@@ -24,53 +24,31 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_download_certificates\local\download;
+use block_download_certificates\local\filter;
+use block_download_certificates\local\request;
+use block_download_certificates\local\scope;
+
 require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
 
-require_login();
-
-// Get parameters.
-$startdate = required_param('start_date', PARAM_TEXT);
-$enddate = required_param('end_date', PARAM_TEXT);
-
-// Validate sesskey for security.
+require_login(null, false);
+request::reject_guest();
 require_sesskey();
 
-// Check capabilities.
-$context = context_system::instance();
-require_capability('block/download_certificates:manage', $context);
+$startdate = required_param('start_date', PARAM_ALPHANUMEXT);
+$enddate = required_param('end_date', PARAM_ALPHANUMEXT);
 
+$PAGE->set_context(context_system::instance());
+$PAGE->set_url('/blocks/download_certificates/download_range.php');
+
+$scope = scope::for_user((int) $USER->id);
 try {
-    // Validate dates.
-    if (empty($startdate) || empty($enddate)) {
-        throw new moodle_exception('invalidparameters', 'block_download_certificates');
-    }
-
-    // Convert date strings to timestamps.
-    $starttime = strtotime($startdate . ' 00:00:00');
-    $endtime = strtotime($enddate . ' 23:59:59');
-
-    if ($starttime === false || $endtime === false) {
-        throw new moodle_exception('invalidaterange', 'block_download_certificates');
-    }
-
-    if ($starttime > $endtime) {
-        throw new moodle_exception('invalidaterange', 'block_download_certificates');
-    }
-
-    // Create controller instance.
-    $controller = new block_download_certificates_controller();
-
-    // Download certificates in date range.
-    $controller->download_certificates_by_date_range($starttime, $endtime);
-} catch (Exception $e) {
-    // Show error page.
-    $PAGE->set_context($context);
-    $PAGE->set_url('/blocks/download_certificates/download_range.php');
-    $PAGE->set_title(get_string('error'));
-
-    echo $OUTPUT->header();
-    echo $OUTPUT->notification($e->getMessage(), 'error');
-    echo $OUTPUT->continue_button(new moodle_url('/blocks/download_certificates/index.php'));
-    echo $OUTPUT->footer();
+    // The days are the user's calendar days: the range runs from the first one's midnight in the
+    // user's time zone up to, not including, the midnight after the last one.
+    [$datefrom, $dateto] = request::date_range($startdate, $enddate);
+    $filter = filter::from_array(['datefrom' => $datefrom, 'dateto' => $dateto]);
+    request::check_zip($scope, 'range', $filter);
+    download::send_zip($scope, $filter, request::zip_filename('range', $filter));
+} catch (moodle_exception $e) {
+    request::redirect_on_error($scope, $e);
 }
