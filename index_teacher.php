@@ -25,12 +25,12 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-use block_download_certificates\local\download;
-use block_download_certificates\local\filter;
+use block_download_certificates\local\bootstrap;
 use block_download_certificates\local\repository;
 use block_download_certificates\local\request;
 use block_download_certificates\local\scope;
 use block_download_certificates\local\zip_tasks;
+use block_download_certificates\output\panel_page;
 
 require_once(__DIR__ . '/../../config.php');
 
@@ -57,47 +57,15 @@ $PAGE->set_url('/blocks/download_certificates/index_teacher.php');
 $PAGE->set_title(get_string('teacher_panel', 'block_download_certificates'));
 $PAGE->set_heading(get_string('teacher_panel', 'block_download_certificates'));
 $PAGE->set_pagelayout('standard');
-$PAGE->requires->css('/blocks/download_certificates/styles.css');
+bootstrap::mark_page();
 
-$repository = new repository();
-$totalcount = $repository->count($scope, new filter());
-
-// The course menu offers the courses a course ZIP may be requested for, not every course where the
-// teacher holds a certificate of their own.
-$teachercourses = array_flip($scope->get_course_ids());
-$courses = [];
-foreach ($repository->get_courses($scope) as $course) {
-    if (isset($teachercourses[$course->id])) {
-        $courses[] = ['id' => $course->id, 'fullname' => $course->name, 'certificate_count' => $course->total];
-    }
-}
-$users = [];
-foreach ($repository->get_users($scope) as $user) {
-    $users[] = ['id' => $user->id, 'fullname' => $user->fullname, 'certificate_count' => $user->total];
-}
-
-$data = [
-    'total_count' => $totalcount,
-    'has_certificates' => $totalcount > 0,
-    'courses' => $courses,
-    'has_courses' => !empty($courses),
-    'users' => $users,
-    'has_users' => !empty($users),
-    'cohorts' => [],
-    'has_cohorts' => false,
-    'sesskey' => sesskey(),
-    'async_threshold' => download::SYNC_LIMIT,
-    'pending_tasks' => zip_tasks::get_pending((int) $USER->id),
-    'download_course_url' => new moodle_url('/blocks/download_certificates/download_course.php'),
-    'download_user_url' => new moodle_url('/blocks/download_certificates/download_user.php'),
-    'is_teacher_view' => true,
-];
+$data = panel_page::teacher($scope, new repository());
 
 // The modules are the manager page's; the web services apply the teacher's scope.
 $PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init');
 $PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [[
     'userid' => (int) $USER->id,
-    'pendingtasks' => $data['pending_tasks'],
+    'pendingtasks' => zip_tasks::get_pending((int) $USER->id),
 ]]);
 
 echo $OUTPUT->header();

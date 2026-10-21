@@ -24,11 +24,8 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-use block_download_certificates\local\download;
-use block_download_certificates\local\filter;
-use block_download_certificates\local\repository;
-use block_download_certificates\local\scope;
 use block_download_certificates\local\zip_tasks;
+use block_download_certificates\output\block_content;
 
 /**
  * Block download_certificates class.
@@ -41,9 +38,6 @@ use block_download_certificates\local\zip_tasks;
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class block_download_certificates extends block_base {
-    /** @var bool Whether the background download module is already on the page. */
-    private $asyncloaded = false;
-
     /**
      * Initialize block.
      */
@@ -86,11 +80,16 @@ class block_download_certificates extends block_base {
     }
 
     /**
-     * Get block content.
+     * The block's content: one template over the context {@see block_content} builds for this page.
+     *
+     * Empty, which hides the block, for a guest, and on a profile whose user the viewer's scope does
+     * not reach.
      *
      * @return stdClass
      */
     public function get_content() {
+        global $USER;
+
         if ($this->content !== null) {
             return $this->content;
         }
@@ -99,382 +98,35 @@ class block_download_certificates extends block_base {
         $this->content->text = '';
         $this->content->footer = '';
 
-        // Don't show for guests or non-logged in users.
         if (!isloggedin() || isguestuser()) {
             return $this->content;
         }
 
         try {
-            $scope = $this->get_scope();
-            $repository = new repository();
-            if ($scope->is_manager()) {
-                $this->content->text = $this->get_manager_content($scope, $repository);
-            } else if ($scope->get_course_ids()) {
-                $this->content->text = $this->get_teacher_content($scope, $repository);
-            } else {
-                $this->content->text = $this->get_learner_content($scope, $repository);
-            }
+            // The page's renderer, not $OUTPUT: a block may be built before the page has set it up.
+            $output = $this->page->get_renderer('core');
+            $data = block_content::for_page($this->page, (int) $USER->id)->export_for_template($output);
         } catch (\Throwable $e) {
             debugging('Download certificates block: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            $this->content->text = html_writer::div(
-                get_string('error_loading_block', 'block_download_certificates'),
-                'alert alert-danger'
-            );
+            $data = ['error' => true, 'hascontent' => true, 'haszip' => false];
+        }
+        if (!$data['hascontent']) {
+            return $this->content;
         }
 
-        return $this->content;
-    }
-
-    /**
-     * The viewer's scope, narrowed to the page the block stands on: a course page keeps that course,
-     * a user profile keeps that user.
-     *
-     * @return scope
-     */
-    private function get_scope(): scope {
-        global $USER;
-
-        $courseid = null;
-        if (!empty($this->page->course->id) && (int) $this->page->course->id !== (int) SITEID) {
-            $courseid = (int) $this->page->course->id;
-        }
-        // The dashboard stands in the viewer's user context too; only a profile page narrows.
-        $profileuserid = null;
-        if ($this->page->context->contextlevel == CONTEXT_USER && str_starts_with($this->page->pagetype, 'user-')) {
-            $profileuserid = (int) $this->page->context->instanceid;
-        }
-        return scope::for_user((int) $USER->id, $courseid, $profileuserid);
-    }
-
-    /**
-     * Get content for managers (admin interface).
-     *
-     * @param scope $scope The viewer's scope.
-     * @param repository $repository The certificate repository.
-     * @return string
-     */
-    private function get_manager_content(scope $scope, repository $repository) {
-        try {
-            $stats = $this->get_certificate_stats($scope, $repository);
-
-            // Create content.
-            $content = '';
-
-            // Stats display.
-            $content .= html_writer::start_div('certificate-stats mb-3');
-            $content .= html_writer::tag(
-                'h6',
-                get_string('certificate_summary', 'block_download_certificates'),
-                ['class' => 'mb-2']
-            );
-
-            $content .= html_writer::start_div('row text-center');
-
-            $content .= html_writer::start_div('col-4');
-            $content .= html_writer::tag('div', $stats['total'], ['class' => 'h5 mb-0 text-primary']);
-            $content .= html_writer::tag(
-                'small',
-                get_string('total', 'block_download_certificates'),
-                ['class' => 'text-muted']
-            );
-            $content .= html_writer::end_div();
-
-            $content .= html_writer::start_div('col-4');
-            $content .= html_writer::tag('div', $stats['courses'], ['class' => 'h5 mb-0 text-success']);
-            $content .= html_writer::tag(
-                'small',
-                get_string('courses', 'block_download_certificates'),
-                ['class' => 'text-muted']
-            );
-            $content .= html_writer::end_div();
-
-            $content .= html_writer::start_div('col-4');
-            $content .= html_writer::tag('div', $stats['recent'], ['class' => 'h5 mb-0 text-info']);
-            $content .= html_writer::tag(
-                'small',
-                get_string('recent_7days', 'block_download_certificates'),
-                ['class' => 'text-muted']
-            );
-            $content .= html_writer::end_div();
-
-            $content .= html_writer::end_div(); // Row.
-            $content .= html_writer::end_div(); // Stats.
-
-            // Quick actions.
-            $content .= html_writer::start_div('quick-actions');
-
-            // Main management link.
-            $manageurl = new moodle_url('/blocks/download_certificates/index.php');
-            $content .= html_writer::link(
-                $manageurl,
-                get_string('manage_certificates', 'block_download_certificates'),
-                ['class' => 'btn btn-primary btn-sm d-block mb-2']
-            );
-
-            // Download all: a POST form, sent to the background task from the threshold on.
-            if ($stats['total'] > 0) {
-                $content .= $this->zip_button(
-                    'download.php',
-                    ['action' => 'download_all'],
-                    'all',
-                    $stats['total'],
-                    get_string('download_all_quick', 'block_download_certificates'),
-                    \core\output\single_button::BUTTON_SUCCESS,
-                    $scope
-                );
-            }
-
-            $content .= html_writer::end_div(); // Actions.
-
-            // Add personal certificates section for managers.
-            $content .= $this->get_manager_personal_section($scope, $repository);
-
-            return $content;
-        } catch (\Throwable $e) {
-            // Error handling.
-            return html_writer::div(
-                get_string('error_loading_block', 'block_download_certificates'),
-                'alert alert-danger'
-            );
-        }
-    }
-
-    /**
-     * Get content for learners (simplified interface).
-     *
-     * @param scope $scope The viewer's scope.
-     * @param repository $repository The certificate repository.
-     * @return string
-     */
-    private function get_learner_content(scope $scope, repository $repository) {
-        try {
-            $usercertcount = $this->get_own_count($scope, $repository);
-
-            // Create content.
-            $content = '';
-
-            // Certificate count display.
-            $content .= html_writer::start_div('user-certificates mb-3 text-center');
-            $content .= html_writer::tag('div', $usercertcount, ['class' => 'h4 mb-1 text-primary']);
-            $content .= html_writer::tag(
-                'small',
-                get_string('my_certificates_count', 'block_download_certificates'),
-                ['class' => 'text-muted d-block']
-            );
-            $content .= html_writer::end_div();
-
-            // Download button (only if user has certificates).
-            if ($usercertcount > 0) {
-                $content .= $this->own_zip_button($scope, $usercertcount, \core\output\single_button::BUTTON_PRIMARY);
-            } else {
-                $content .= html_writer::div(
-                    get_string('no_certificates_user', 'block_download_certificates'),
-                    'alert alert-info text-center'
-                );
-            }
-
-            return $content;
-        } catch (\Throwable $e) {
-            // Error handling.
-            return html_writer::div(
-                get_string('error_loading_block', 'block_download_certificates'),
-                'alert alert-danger'
-            );
-        }
-    }
-
-    /**
-     * The button that downloads the viewer's own certificates.
-     *
-     * @param scope $scope The viewer's scope.
-     * @param int $count The viewer's certificates within the scope.
-     * @param string $style A single_button type.
-     * @return string
-     */
-    private function own_zip_button(scope $scope, int $count, string $style): string {
-        return $this->zip_button(
-            'download_user.php',
-            ['action' => 'download_my_certificates', 'userid' => $scope->get_user_id()],
-            'user',
-            $count,
-            get_string('download_my_certificates', 'block_download_certificates'),
-            $style,
-            $scope
-        );
-    }
-
-    /**
-     * A button posting a ZIP request to a download page, with the session key in the body.
-     *
-     * The button carries what the background download module reads: from
-     * {@see download::SYNC_LIMIT} certificates on, the module queues the request instead of posting
-     * it. The module is loaded with the first such button.
-     *
-     * @param string $script The download page, in the plugin directory.
-     * @param array $params The request's values, posted as hidden fields.
-     * @param string $type The request type.
-     * @param int $count The certificates the request holds.
-     * @param string $label The button text.
-     * @param string $style A single_button type.
-     * @param scope $scope The viewer's scope.
-     * @return string
-     */
-    private function zip_button(
-        string $script,
-        array $params,
-        string $type,
-        int $count,
-        string $label,
-        string $style,
-        scope $scope
-    ): string {
-        global $OUTPUT;
-
-        if (!$this->asyncloaded) {
-            $this->asyncloaded = true;
+        if ($data['haszip']) {
+            // The module queues a ZIP request from the threshold on and asks the confirmation of a
+            // form that carries one.
             $this->page->requires->js_call_amd('block_download_certificates/async_download', 'init', [[
-                'userid' => $scope->get_user_id(),
-                'pendingtasks' => zip_tasks::get_pending($scope->get_user_id()),
+                'userid' => (int) $USER->id,
+                'pendingtasks' => zip_tasks::get_pending((int) $USER->id),
             ]]);
         }
-        $button = new \core\output\single_button(
-            new moodle_url('/blocks/download_certificates/' . $script, $params),
-            $label,
-            'post',
-            $style,
-            [
-                'data-download-type' => $type,
-                'data-cert-count' => $count,
-                'data-async-threshold' => download::SYNC_LIMIT,
-            ]
+        $this->content->text = $this->page->get_renderer('core')->render_from_template(
+            'block_download_certificates/block_content',
+            $data
         );
-        $button->class = 'singlebutton mb-2';
-        return $OUTPUT->render($button);
-    }
-
-    /**
-     * The viewer's own certificates within the scope.
-     *
-     * @param scope $scope The viewer's scope.
-     * @param repository $repository The certificate repository.
-     * @return int
-     */
-    private function get_own_count(scope $scope, repository $repository): int {
-        return $repository->count($scope, new filter(userid: $scope->get_user_id()));
-    }
-
-    /**
-     * The manager summary: certificates, courses holding them, certificates of the last 7 days.
-     *
-     * @param scope $scope The viewer's scope.
-     * @param repository $repository The certificate repository.
-     * @return array total, courses, recent.
-     */
-    private function get_certificate_stats(scope $scope, repository $repository): array {
-        return [
-            'total' => $repository->count($scope, new filter()),
-            'courses' => count($repository->get_courses($scope)),
-            'recent' => $repository->count($scope, new filter(datefrom: time() - 7 * DAYSECS)),
-        ];
-    }
-
-    /**
-     * Get personal certificates section for managers.
-     *
-     * @param scope $scope The viewer's scope.
-     * @param repository $repository The certificate repository.
-     * @return string
-     */
-    private function get_manager_personal_section(scope $scope, repository $repository) {
-        try {
-            $usercertcount = $this->get_own_count($scope, $repository);
-
-            // Create personal section.
-            $content = '';
-
-            // Add separator.
-            $content .= html_writer::tag('hr', '', ['class' => 'my-3']);
-
-            // Personal certificates section.
-            $content .= html_writer::start_div('manager-personal-certificates');
-            $content .= html_writer::tag(
-                'h6',
-                get_string('my_certificates', 'block_download_certificates'),
-                ['class' => 'mb-2 text-secondary']
-            );
-
-            // Certificate count display.
-            $content .= html_writer::start_div('user-certificates mb-2 text-center');
-            $content .= html_writer::tag('div', $usercertcount, ['class' => 'h5 mb-1 text-primary']);
-            $content .= html_writer::tag(
-                'small',
-                get_string('my_certificates_count', 'block_download_certificates'),
-                ['class' => 'text-muted d-block']
-            );
-            $content .= html_writer::end_div();
-
-            // Download button (only if user has certificates).
-            if ($usercertcount > 0) {
-                $content .= $this->own_zip_button($scope, $usercertcount, \core\output\single_button::BUTTON_SECONDARY);
-            } else {
-                $content .= html_writer::div(
-                    get_string('no_certificates_user', 'block_download_certificates'),
-                    'alert alert-light text-center small'
-                );
-            }
-
-            $content .= html_writer::end_div(); // Manager-personal-certificates.
-
-            return $content;
-        } catch (\Throwable $e) {
-            // Error handling - return empty string on error.
-            debugging('Error loading manager personal section: ' . $e->getMessage());
-            return '';
-        }
-    }
-
-    /**
-     * Content for a user with courses of their own: the certificates in scope and a link to the
-     * teacher page.
-     *
-     * @param scope $scope The viewer's scope.
-     * @param repository $repository The certificate repository.
-     * @return string HTML of the block content
-     */
-    private function get_teacher_content(scope $scope, repository $repository): string {
-        try {
-            $totalcount = $repository->count($scope, new filter());
-
-            $content = '';
-
-            // Certificate count.
-            $content .= html_writer::start_div('certificate-stats mb-3 text-center');
-            $content .= html_writer::tag('div', $totalcount, ['class' => 'h4 mb-0 text-primary']);
-            $content .= html_writer::tag(
-                'small',
-                get_string('teacher_certificates', 'block_download_certificates'),
-                ['class' => 'text-muted d-block']
-            );
-            $content .= html_writer::end_div();
-
-            // Link to the teacher page.
-            $manageurl = new moodle_url('/blocks/download_certificates/index_teacher.php');
-            $content .= html_writer::link(
-                $manageurl,
-                get_string('teacher_panel', 'block_download_certificates'),
-                ['class' => 'btn btn-primary btn-sm d-block mb-2']
-            );
-
-            // The personal section, as for managers.
-            $content .= $this->get_manager_personal_section($scope, $repository);
-
-            return $content;
-        } catch (\Throwable $e) {
-            return html_writer::div(
-                get_string('error_loading_block', 'block_download_certificates'),
-                'alert alert-danger'
-            );
-        }
+        return $this->content;
     }
 
     /**

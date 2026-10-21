@@ -1,5 +1,9 @@
 /**
- * Styles for block_download_certificates plugin.
+ * Styles for block_download_certificates.
+ *
+ * Every selector is qualified by a plugin class: plugin CSS is compiled before the theme's, so only
+ * specificity beats a core rule. Colours come from the theme's tokens with fallback chains, and every
+ * rule that paints a background states its text colour.
  *
  * @package   block_download_certificates
  * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
@@ -7,413 +11,163 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-/* ================================================================
-   Dashboard Header
-   ================================================================ */
-
-.block-download-certificat-main .cert-dashboard .card-body {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-radius: 8px;
+/* The plugin's tokens, on every root it paints; the progress dialogue is appended to body. */
+.block-download-certificates-page,
+.block-download-certificates-content,
+.block-download-certificates-progress,
+.block-download-certificates-modal {
+    --block-download-certificates-accent: var(--bs-primary, var(--primary, #0f6cbf));
+    --block-download-certificates-border: var(--bs-border-color, #dee2e6);
+    --block-download-certificates-surface: var(--bs-body-bg, var(--white, #fff));
+    --block-download-certificates-ink: var(--bs-body-color, #1d2125);
+    --block-download-certificates-muted: var(--bs-secondary-color, #6a737b);
+    --block-download-certificates-header: var(--bs-tertiary-bg, #f8f9fa);
 }
 
-.block-download-certificat-main .cert-stat-icon {
-    opacity: 0.85;
+/* Numbers line up in columns. */
+.block-download-certificates-page .block-download-certificates-number,
+.block-download-certificates-page .block-download-certificates-table-card,
+.block-download-certificates-content .block-download-certificates-number,
+.block-download-certificates-progress {
+    font-variant-numeric: tabular-nums;
 }
 
-.block-download-certificat-main .btn-download-all {
-    background: linear-gradient(135deg, #0d6efd, #0a58ca);
-    border: none;
-    padding: 10px 24px;
-    border-radius: 8px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
+/* Block. */
+.block-download-certificates-content .block-download-certificates-stats dt {
+    font-weight: normal;
 }
 
-.block-download-certificat-main .btn-download-all:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+.block-download-certificates-content .block-download-certificates-list a {
+    overflow-wrap: anywhere;
 }
 
-/* ================================================================
-   Filter Tabs
-   ================================================================ */
-
-.block-download-certificat-main .cert-filters-card .card-header {
-    background: transparent;
-    border-bottom: none;
+/* Pages: the download forms' menus share a row two by two. */
+.block-download-certificates-page .block-download-certificates-menu {
+    flex: 1 1 45%;
+    min-width: 15rem;
 }
 
-.block-download-certificat-main .cert-filters-card .card-header-tabs {
-    margin-right: 0;
-    margin-bottom: 0;
-    margin-left: 0;
-    border-bottom: 0;
-}
-
-.block-download-certificat-main .cert-filters-card .nav-tabs {
-    border-bottom: 2px solid #dee2e6;
-}
-
-.block-download-certificat-main .cert-filters-card .nav-tabs .nav-link {
-    color: #6c757d;
-    border: none;
-    border-bottom: 3px solid transparent;
-    padding: 12px 20px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    margin-bottom: -2px;
-}
-
-.block-download-certificat-main .cert-filters-card .nav-tabs .nav-link:hover {
-    color: #0d6efd;
-    border-bottom-color: rgba(13, 110, 253, 0.3);
-    background-color: rgba(13, 110, 253, 0.04);
-}
-
-.block-download-certificat-main .cert-filters-card .nav-tabs .nav-link.active {
-    color: #0d6efd;
-    border-bottom-color: #0d6efd;
-    background-color: transparent;
-    font-weight: 600;
-}
-
-.block-download-certificat-main .cert-filters-card .nav-tabs .nav-link i {
-    opacity: 0.7;
-}
-
-.block-download-certificat-main .cert-filters-card .nav-tabs .nav-link.active i {
-    opacity: 1;
-}
-
-.block-download-certificat-main .tab-pane {
-    animation: fadeInTab 0.3s ease;
-}
-
-@keyframes fadeInTab {
-    from {
-        opacity: 0;
-        transform: translateY(5px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ================================================================
-   Table Card
-   ================================================================ */
-
-.block-download-certificat-main .cert-table-card .card-header {
-    background: linear-gradient(135deg, #f8f9fa, #ffffff);
-    border-bottom: 1px solid #dee2e6;
-}
-
-.block-download-certificat-main .cert-table-card .card-footer {
-    background-color: #f8f9fa;
-    border-top: 1px solid #dee2e6;
-}
-
-/* ================================================================
-   Barre de recherche custom — indépendant de Bootstrap
-   ================================================================ */
-
-.block-download-certificat-main .cert-search-group {
+/* Search field. */
+.block-download-certificates-page .block-download-certificates-search {
     display: flex;
-    align-items: stretch;
-    min-width: 250px;
-    margin-right: 0.75rem;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    overflow: hidden;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.block-download-certificat-main .cert-search-group:focus-within {
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.1rem rgba(13, 110, 253, 0.15);
-}
-
-.block-download-certificat-main .cert-search-icon {
-    display: flex;
+    flex: 1 1 15rem;
     align-items: center;
-    padding: 0.25rem 0.6rem;
-    background-color: #fff;
-    color: #6c757d;
-    font-size: 0.85rem;
+    min-width: 12rem;
+    color: var(--block-download-certificates-ink);
+    background-color: var(--block-download-certificates-surface);
+    border: 1px solid var(--block-download-certificates-border);
+    border-radius: 0.375rem;
 }
 
-.block-download-certificat-main .cert-search-input {
-    flex: 1;
-    border: none;
-    outline: none;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.875rem;
-    background: #fff;
+.block-download-certificates-page .block-download-certificates-search:focus-within {
+    outline: 2px solid var(--block-download-certificates-accent);
+    outline-offset: 1px;
+}
+
+.block-download-certificates-page .block-download-certificates-search-icon {
+    padding: 0 0.5rem;
+    color: var(--block-download-certificates-muted);
+}
+
+.block-download-certificates-page .block-download-certificates-search-input {
+    flex: 1 1 auto;
     min-width: 0;
+    padding: 0.375rem 0.25rem;
+    color: inherit;
+    background-color: transparent;
+    border: 0;
 }
 
-.block-download-certificat-main .cert-search-input::placeholder {
-    color: #adb5bd;
+/* The field's outline is drawn by the group around it. */
+.block-download-certificates-page .block-download-certificates-search-input:focus {
+    outline: 0;
 }
 
-.block-download-certificat-main .cert-search-clear {
-    display: flex;
-    align-items: center;
-    padding: 0.25rem 0.6rem;
-    background: #fff;
-    border: none;
-    border-left: 1px solid #ced4da;
-    color: #6c757d;
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: background-color 0.15s ease, color 0.15s ease;
+.block-download-certificates-page .block-download-certificates-search-clear {
+    align-self: stretch;
+    padding: 0 0.625rem;
+    color: var(--block-download-certificates-muted);
+    background-color: transparent;
+    border: 0;
+    border-left: 1px solid var(--block-download-certificates-border);
 }
 
-.block-download-certificat-main .cert-search-clear:hover {
-    background-color: #f8f9fa;
-    color: #495057;
+.block-download-certificates-page .block-download-certificates-search-clear:hover,
+.block-download-certificates-page .block-download-certificates-search-clear:focus-visible {
+    color: var(--block-download-certificates-ink);
 }
 
-/* Sélecteur per-page custom */
-.block-download-certificat-main .cert-perpage-select {
+.block-download-certificates-page .form-select.block-download-certificates-perpage {
     width: auto;
-    padding: 0.3rem 1.75rem 0.3rem 0.5rem;
-    font-size: 0.875rem;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    background-color: #fff;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 0.4rem center;
-    background-size: 12px 10px;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    cursor: pointer;
-    transition: border-color 0.15s ease;
 }
 
-.block-download-certificat-main .cert-perpage-select:focus {
-    border-color: #86b7fe;
-    outline: none;
-    box-shadow: 0 0 0 0.1rem rgba(13, 110, 253, 0.15);
-}
-
-/* ================================================================
-   Dynamic Table
-   ================================================================ */
-
-.block-download-certificat-main .cert-table {
-    margin: 0;
-}
-
-.block-download-certificat-main .cert-table thead th {
+/* Table. */
+.block-download-certificates-page .block-download-certificates-table thead th {
     position: sticky;
     top: 0;
-    background: #f1f3f5;
-    border-top: none;
-    font-weight: 600;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #495057;
-    white-space: nowrap;
     z-index: 1;
-}
-
-.block-download-certificat-main .cert-table .cert-sort {
-    font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
+    font-size: 0.875rem;
+    color: var(--block-download-certificates-ink);
     white-space: nowrap;
-    transition: color 0.15s ease;
+    background-color: var(--block-download-certificates-header);
 }
 
-.block-download-certificat-main .cert-table .cert-sort:hover {
-    color: #0d6efd;
-}
-
-.block-download-certificat-main .cert-table tbody td {
-    vertical-align: middle;
-    padding: 10px 12px;
-    font-size: 0.9rem;
-}
-
-/* Row animation */
-.block-download-certificat-main .cert-row {
-    animation: fadeInRow 0.3s ease both;
-}
-
-@keyframes fadeInRow {
-    from {
-        opacity: 0;
-        transform: translateX(-5px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-/* ================================================================
-   Certificate Type Badges
-   ================================================================ */
-
-.block-download-certificat-main .cert-table .badge {
-    font-size: 0.72rem;
-    padding: 4px 8px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-}
-
-/* ================================================================
-   Pagination
-   ================================================================ */
-
-.block-download-certificat-main .pagination {
-    margin: 0;
-}
-
-.block-download-certificat-main .pagination .page-link {
-    border-radius: 4px;
-    margin: 0 2px;
-    color: #495057;
-    border-color: #dee2e6;
-    transition: all 0.15s ease;
-    min-width: 36px;
-    text-align: center;
-}
-
-.block-download-certificat-main .pagination .page-link:hover {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-    color: #fff;
-}
-
-.block-download-certificat-main .pagination .page-item.active .page-link {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-}
-
-.block-download-certificat-main .pagination .page-item.disabled .page-link {
-    opacity: 0.5;
-}
-
-/* ================================================================
-   Responsive
-   ================================================================ */
-
-@media (max-width: 768px) {
-    .block-download-certificat-main .cert-filters-card .nav-tabs .nav-link {
-        padding: 8px 12px;
-        font-size: 0.85rem;
-    }
-
-    .block-download-certificat-main .cert-filters-card .nav-tabs .nav-link i {
-        display: none;
-    }
-
-    .block-download-certificat-main .cert-table-card .card-header .d-flex {
-        flex-direction: column;
-    }
-
-    .block-download-certificat-main .cert-search-group {
-        min-width: 100% !important;
-    }
-}
-
-/* ================================================================
-   Async Progress Banner (persistent, top of page)
-   ================================================================ */
-
-.async-progress-banner {
-    background: linear-gradient(135deg, #e8f0fe 0%, #f0f4ff 100%);
-    border: 1px solid #c2d5f7;
-    border-radius: 8px;
-    padding: 12px 20px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.1);
-    animation: bannerSlideIn 0.3s ease-out;
-}
-
-.async-progress-banner .progress {
-    border-radius: 10px;
-    background-color: rgba(0, 0, 0, 0.08);
-}
-
-.async-progress-banner .progress-bar {
-    border-radius: 10px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.async-progress-banner-success {
-    background: linear-gradient(135deg, #e8f8e8 0%, #f0fff0 100%);
-    border-color: #a3d9a5;
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.1);
-}
-
-.async-progress-banner-error {
-    background: linear-gradient(135deg, #fde8e8 0%, #fff0f0 100%);
-    border-color: #f5c6cb;
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.1);
-}
-
-@keyframes bannerSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ================================================================
-   Boutons de fermeture custom — indépendant de Bootstrap 4 et 5
-   On utilise une classe propriétaire pour éviter tout conflit
-   entre les styles .close (BS4) et .btn-close (BS5).
-   ================================================================ */
-
-.cert-close-btn {
-    background: transparent;
-    border: none;
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1;
-    color: #fff;
-    opacity: 0.8;
-    padding: 0.25rem 0.5rem;
-    margin-left: auto;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-}
-
-.cert-close-btn:hover,
-.cert-close-btn:focus {
-    opacity: 1;
-    color: #fff;
+.block-download-certificates-page .block-download-certificates-table .block-download-certificates-sort {
+    font: inherit;
+    white-space: nowrap;
     text-decoration: none;
-    outline: none;
 }
 
-/* Variante sombre (pour les alertes sur fond clair) */
-.cert-close-btn.cert-close-btn-dark {
-    color: #000;
-    opacity: 0.5;
+.block-download-certificates-page .block-download-certificates-table td {
+    vertical-align: middle;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .block-download-certificates-page .block-download-certificates-row {
+        animation: block-download-certificates-fade-in 200ms ease-out both;
+    }
+}
+
+@keyframes block-download-certificates-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/*
+ * Bootstrap 5 names that Moodle 4.5's bridge (theme/boost/scss/moodle/bs5-bridge.scss) lacks, for the
+ * plugin's pages only: bootstrap::mark_page() adds the gate class on 4.5. The block cannot be marked
+ * and uses none of these. After the branch split this block lives on the 4.5 branch only.
+ */
+body.block-download-certificates-bs4 .visually-hidden {
     position: absolute;
-    top: 0;
-    right: 0;
-    padding: 0.75rem 1rem;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
-.cert-close-btn.cert-close-btn-dark:hover {
-    color: #000;
-    opacity: 0.75;
+body.block-download-certificates-bs4 .gap-2 {
+    gap: 0.5rem;
+}
+
+/* No chevron image: the browser's own arrow, as stylelint keeps data URLs out. */
+body.block-download-certificates-bs4 .form-select {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--block-download-certificates-ink, #1d2125);
+    background-color: var(--block-download-certificates-surface, #fff);
+    border: 1px solid var(--gray, #8f959e);
+    border-radius: 0.5rem;
 }

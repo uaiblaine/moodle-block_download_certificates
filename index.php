@@ -24,12 +24,12 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-use block_download_certificates\local\download;
-use block_download_certificates\local\filter;
+use block_download_certificates\local\bootstrap;
 use block_download_certificates\local\repository;
 use block_download_certificates\local\request;
 use block_download_certificates\local\scope;
 use block_download_certificates\local\zip_tasks;
+use block_download_certificates\output\panel_page;
 
 require_once(__DIR__ . '/../../config.php');
 
@@ -45,50 +45,17 @@ $PAGE->set_url('/blocks/download_certificates/index.php');
 $PAGE->set_title(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_heading(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_pagelayout('admin');
+bootstrap::mark_page();
 
-$repository = new repository();
-$totalcount = $repository->count($scope, new filter());
+$data = panel_page::manager($scope, new repository());
 
-$courses = [];
-foreach ($repository->get_courses($scope) as $course) {
-    $courses[] = ['id' => $course->id, 'fullname' => $course->name, 'certificate_count' => $course->total];
-}
-$users = [];
-foreach ($repository->get_users($scope) as $user) {
-    $users[] = ['id' => $user->id, 'fullname' => $user->fullname, 'certificate_count' => $user->total];
-}
-$cohorts = [];
-foreach ($repository->get_cohorts($scope) as $cohort) {
-    $cohorts[] = ['id' => $cohort->id, 'name' => $cohort->name, 'certificate_count' => $cohort->total];
-}
-
-$data = [
-    'total_count' => $totalcount,
-    'download_all_url' => new moodle_url('/blocks/download_certificates/download.php'),
-    'download_range_url' => new moodle_url('/blocks/download_certificates/download_range.php'),
-    'download_course_url' => new moodle_url('/blocks/download_certificates/download_course.php'),
-    'download_cohort_url' => new moodle_url('/blocks/download_certificates/download_cohort.php'),
-    'download_user_url' => new moodle_url('/blocks/download_certificates/download_user.php'),
-    'has_certificates' => $totalcount > 0,
-    'courses' => $courses,
-    'has_courses' => !empty($courses),
-    'users' => $users,
-    'has_users' => !empty($users),
-    'cohorts' => $cohorts,
-    'has_cohorts' => !empty($cohorts),
-    'sesskey' => sesskey(),
-    'async_threshold' => download::SYNC_LIMIT,
-    'pending_tasks' => zip_tasks::get_pending((int) $USER->id),
-];
-$PAGE->requires->css('/blocks/download_certificates/styles.css');
-
+// The theme already serves styles.css on every page, as for any block.
 $PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init');
 $PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [[
     'userid' => (int) $USER->id,
-    'pendingtasks' => $data['pending_tasks'],
+    'pendingtasks' => zip_tasks::get_pending((int) $USER->id),
 ]]);
 
 echo $OUTPUT->header();
 echo $OUTPUT->render_from_template('block_download_certificates/main_page', $data);
-
 echo $OUTPUT->footer();

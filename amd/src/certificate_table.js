@@ -310,7 +310,7 @@ const loadGroups = async(course, wrapper, group) => {
     grouprequest += 1;
     const request = grouprequest;
     group.replaceChildren();
-    wrapper.style.display = 'none';
+    wrapper.hidden = true;
     const courseid = parseInt(course.value, 10) || 0;
     if (!courseid) {
         return;
@@ -325,7 +325,7 @@ const loadGroups = async(course, wrapper, group) => {
         }
         group.append(new Option(strings.allgroups, ''));
         groups.forEach(({id, name}) => group.append(new Option(name, String(id))));
-        wrapper.style.display = '';
+        wrapper.hidden = false;
     } catch (error) {
         Notification.exception(error);
     }

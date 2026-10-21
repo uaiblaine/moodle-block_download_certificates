@@ -156,7 +156,10 @@ final class block_download_certificates_test extends \advanced_testcase {
         $manager = $gen->create_user();
         $gen->role_assign('manager', $manager->id);
         $this->setUser($manager);
-        $total = static fn(string $html): string => preg_match('~h5 mb-0 text-primary">(\d+)<~', $html, $m) ? $m[1] : '';
+        // The first number of the block: the manager's total, or the profile section's count.
+        $total = static function (string $html): string {
+            return preg_match('~block-download-certificates-number">(\d+)<~', $html, $m) ? $m[1] : '';
+        };
 
         $this->assertSame('3', $total($this->render($this->dashboard())));
         $this->assertSame('1', $total($this->render($this->course_page($coursea))));

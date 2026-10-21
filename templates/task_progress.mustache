@@ -23,7 +23,8 @@
 
     Data attributes required for JS:
     * data-region="task-progress" - The root.
-    * data-region="message", "bar", "detail", "hint" - The parts the module updates.
+    * data-region="message", "bar", "detail", "hint" - The parts the module updates; it also sets
+      the bar's width, which the template leaves to it.
     * data-action="download" - Hands the ready archive over.
     * data-action="dismiss" - Removes the banner.
 
@@ -56,7 +57,7 @@
             <p id="{{uniqid}}-task-message" class="mb-2" data-region="message" role="status">{{message}}</p>
             <div class="progress">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" data-region="bar"
-                     style="width: {{percent}}%;" aria-valuenow="{{percent}}" aria-valuemin="0" aria-valuemax="100"
+                     aria-valuenow="{{percent}}" aria-valuemin="0" aria-valuemax="100"
                      aria-labelledby="{{uniqid}}-task-message">{{percent}}%</div>
             </div>
             <p class="small text-muted mt-2 mb-0" data-region="detail">{{progress}} / {{total}}</p>

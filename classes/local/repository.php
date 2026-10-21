@@ -160,7 +160,8 @@ class repository {
      * The courses that hold certificates in scope, for menus. The site course is left out.
      *
      * @param scope $scope Who is asking.
-     * @return \stdClass[] Keyed by course id: id, fullname, shortname, name (formatted), total.
+     * @return \stdClass[] Keyed by course id: id, fullname, shortname, name (formatted, not escaped: the
+     *         templates escape it once), total.
      */
     public function get_courses(scope $scope): array {
         global $DB;
@@ -191,7 +192,7 @@ class repository {
                 'id' => $id,
                 'fullname' => $record->fullname,
                 'shortname' => $record->shortname,
-                'name' => format_string($record->fullname, true, ['context' => \context_course::instance($id)]),
+                'name' => format_string($record->fullname, true, ['context' => \context_course::instance($id), 'escape' => false]),
                 'total' => (int) $record->total,
             ];
         }
@@ -238,7 +239,8 @@ class repository {
      * context, the rule of core's `cohort_get_available_cohorts()`.
      *
      * @param scope $scope Who is asking.
-     * @return \stdClass[] Keyed by cohort id: id, name (formatted in the cohort's context), total.
+     * @return \stdClass[] Keyed by cohort id: id, name (formatted in the cohort's context, not escaped),
+     *         total.
      */
     public function get_cohorts(scope $scope): array {
         global $DB;
@@ -268,7 +270,7 @@ class repository {
             }
             $cohorts[(int) $record->id] = (object) [
                 'id' => (int) $record->id,
-                'name' => format_string($record->name, true, ['context' => $context]),
+                'name' => format_string($record->name, true, ['context' => $context, 'escape' => false]),
                 'total' => (int) $record->total,
             ];
         }

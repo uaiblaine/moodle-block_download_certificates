@@ -1,0 +1,88 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_download_certificates/block_content
+
+    The block's content. Which sections show is the viewer's scope's decision, narrowed to the page
+    the block stands on (classes/output/block_content.php). The block renders inside pages the
+    plugin does not own and cannot mark them for the Bootstrap 4 polyfill, so its markup uses only
+    names that exist on Moodle 4.5 and 5.x alike.
+
+    Context variables required for this template:
+    * error - Whether the content failed to load.
+    * manager - The manager's summary (block_manager), or false.
+    * teacher - The teacher's summary (block_teacher), or false.
+    * personal - One user's certificates (block_personal), or false.
+
+    Example context (json):
+    {
+        "error": false,
+        "manager": {
+            "heading": "Certificate Summary",
+            "stats": [
+                {"value": 42, "label": "Total"},
+                {"value": 3, "label": "Courses"},
+                {"value": 5, "label": "Last 7 days"}
+            ],
+            "manageurl": "https://example.com/blocks/download_certificates/index.php",
+            "zip": {
+                "url": "https://example.com/blocks/download_certificates/download.php",
+                "type": "all",
+                "count": 42,
+                "threshold": 30,
+                "sesskey": "abc123",
+                "fields": [{"name": "action", "value": "download_all"}],
+                "label": "Download all",
+                "buttonclass": "btn-success btn-sm w-100",
+                "confirm": "Are you sure you want to download all certificates?"
+            }
+        },
+        "teacher": false,
+        "personal": {
+            "heading": "My Certificates",
+            "count": 2,
+            "countlabel": "My certificates",
+            "hascertificates": true,
+            "certificates": [
+                {
+                    "name": "Certificate of completion",
+                    "course": "",
+                    "date": "20 October 2026",
+                    "url": "https://example.com/blocks/download_certificates/download_precise.php?type=customcert&issueid=1",
+                    "downloadlabel": "Download Certificate of completion"
+                }
+            ],
+            "more": "",
+            "zip": false,
+            "empty": ""
+        }
+    }
+}}
+<div class="block-download-certificates-content">
+    {{#error}}
+    <div class="alert alert-danger mb-0" role="alert">{{#str}}error_loading_block, block_download_certificates{{/str}}</div>
+    {{/error}}
+    {{#manager}}
+    {{> block_download_certificates/block_manager}}
+    {{/manager}}
+    {{#teacher}}
+    {{> block_download_certificates/block_teacher}}
+    {{/teacher}}
+    {{#personal}}
+    {{> block_download_certificates/block_personal}}
+    {{/personal}}
+</div>

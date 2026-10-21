@@ -1,226 +1,87 @@
 {{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
     @template block_download_certificates/teacher_page
 
-    Page d'interface enseignant — tableau de certificats filtré sur le périmètre de l'enseignant.
-    Affiche uniquement les onglets "par cours" et "par utilisateur" (pas de plage de dates, pas de cohortes).
+    The teacher page (index_teacher.php): the header, the course tab (with its group menu) and the
+    user tab, and the certificates table, all within the teacher's scope. The context comes from
+    \block_download_certificates\output\panel_page::teacher().
 
-    @package block_download_certificates
-    @copyright 2025 E-learning Touch <contact@elearningtouch.com>
-    @copyright 2026 Anderson Blaine
-    @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+    Context variables required for this template:
+    * heading, total, totallabel, downloadall - As block_download_certificates/page_header.
+    * hastabs, tabs - As block_download_certificates/filter_bar; hastabs is false without certificates.
+    * hascertificates, emptymessage, emptydescription, perpage - As block_download_certificates/table_card.
+
+    Example context (json):
+    {
+        "heading": "Teacher Panel",
+        "total": 42,
+        "totallabel": "Certificates from your students",
+        "downloadall": false,
+        "hascertificates": true,
+        "hastabs": true,
+        "tabs": [
+            {
+                "id": "course",
+                "icon": "fa-graduation-cap",
+                "label": "By course",
+                "help": "Select a course to download all certificates issued for that course.",
+                "active": true,
+                "range": false,
+                "menu": {
+                    "url": "https://example.com/blocks/download_certificates/download_course.php",
+                    "sesskey": "abc123",
+                    "threshold": 30,
+                    "type": "course",
+                    "action": "download_course",
+                    "selectid": "course_select",
+                    "name": "courseid",
+                    "selectlabel": "Course",
+                    "placeholder": "-- Choose a course --",
+                    "options": [
+                        {
+                            "value": 7,
+                            "text": "Analytical engines",
+                            "count": 12
+                        }
+                    ],
+                    "groups": true,
+                    "buttonlabel": "Download Course Certificates"
+                }
+            }
+        ],
+        "emptymessage": "No certificates found within your scope.",
+        "emptydescription": "",
+        "perpage": [
+            {
+                "value": 25,
+                "selected": false
+            },
+            {
+                "value": 50,
+                "selected": true
+            }
+        ]
+    }
 }}
-
-<div class="block-download-certificat-main">
-
-    {{! ================================================================ }}
-    {{! HEADER: Résumé du périmètre enseignant                          }}
-    {{! ================================================================ }}
-    <div class="cert-dashboard card mb-4">
-        <div class="card-body">
-            <div class="d-flex flex-wrap align-items-center justify-content-between">
-                {{! Titre et compteur }}
-                <div class="d-flex align-items-center">
-                    <div class="cert-stat-icon mr-3">
-                        <i class="fa fa-certificate fa-3x text-primary"></i>
-                    </div>
-                    <div>
-                        <h2 class="mb-0">{{#str}}teacher_panel, block_download_certificates{{/str}}</h2>
-                        <p class="text-muted mb-0">
-                            <strong class="text-primary">{{total_count}}</strong>
-                            {{#str}}teacher_certificates, block_download_certificates{{/str}}
-                        </p>
-                    </div>
-                </div>
-
-
-            </div>
-        </div>
-    </div>
-
-    {{! ================================================================ }}
-    {{! FILTRES DE TÉLÉCHARGEMENT : Onglets cours et utilisateur         }}
-    {{! (pas de plage de dates ni de cohortes pour les enseignants)      }}
-    {{! ================================================================ }}
-    {{#has_certificates}}
-    <div class="card mb-4 cert-filters-card">
-        <div class="card-header p-0">
-            <ul class="nav nav-tabs card-header-tabs" role="tablist">
-                {{#has_courses}}
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link active" id="tab-course"
-                       data-toggle="tab" data-bs-toggle="tab"
-                       href="#pane-course" data-bs-target="#pane-course"
-                       role="tab" aria-controls="pane-course" aria-selected="true">
-                        <i class="fa fa-graduation-cap mr-1"></i>
-                        {{#str}}tab_course, block_download_certificates{{/str}}
-                    </a>
-                </li>
-                {{/has_courses}}
-                {{#has_users}}
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link {{^has_courses}}active{{/has_courses}}" id="tab-user"
-                       data-toggle="tab" data-bs-toggle="tab"
-                       href="#pane-user" data-bs-target="#pane-user"
-                       role="tab" aria-controls="pane-user" aria-selected="false">
-                        <i class="fa fa-user mr-1"></i>
-                        {{#str}}tab_user, block_download_certificates{{/str}}
-                    </a>
-                </li>
-                {{/has_users}}
-            </ul>
-        </div>
-
-        <div class="card-body tab-content">
-            {{! ---- Onglet Cours ---- }}
-            {{#has_courses}}
-            <div class="tab-pane fade show active" id="pane-course" role="tabpanel">
-                <p class="text-muted small mb-3">
-                    {{#str}}course_download_help, block_download_certificates{{/str}}
-                </p>
-                <form method="post"
-                      action="{{download_course_url}}"
-                      data-download-type="course"
-                      data-cert-count="0"
-                      data-async-threshold="{{async_threshold}}"
-                      id="form-download-course"
-                      class="flex-wrap">
-                    <input type="hidden" name="action" value="download_course">
-                    <input type="hidden" name="sesskey" value="{{sesskey}}">
-
-                    {{! Sélecteur de cours }}
-                    <div class="form-group mb-2">
-                        <label for="course_select" class="sr-only">
-                            {{#str}}choose_course, block_download_certificates{{/str}}
-                        </label>
-                        <select id="course_select" name="courseid"
-                                class="form-control" required style="min-width: 280px;">
-                            <option value="">{{#str}}choose_course, block_download_certificates{{/str}}</option>
-                            {{#courses}}
-                            <option value="{{id}}" data-count="{{certificate_count}}">
-                                {{fullname}} ({{certificate_count}} {{#str}}certificates, block_download_certificates{{/str}})
-                            </option>
-                            {{/courses}}
-                        </select>
-                    </div>
-
-                    {{! Sélecteur de groupe — affiché dynamiquement si l'enseignant a des groupes dans ce cours }}
-                    <div class="form-group mb-2" id="group-select-wrapper" style="display:none;">
-                        <label for="group_select" class="sr-only">
-                            {{#str}}choose_group, block_download_certificates{{/str}}
-                        </label>
-                        <select id="group_select" name="groupid"
-                                class="form-control" style="min-width: 220px;">
-                            {{! Options chargées dynamiquement par JS }}
-                        </select>
-                    </div>
-
-                    <div class="form-group mb-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fa fa-download mr-1"></i>
-                            {{#str}}download_course_certificates, block_download_certificates{{/str}}
-                        </button>
-                    </div>
-                </form>
-            </div>
-            {{/has_courses}}
-
-            {{! ---- Onglet Utilisateur ---- }}
-            {{#has_users}}
-            <div class="tab-pane fade {{^has_courses}}show active{{/has_courses}}" id="pane-user" role="tabpanel">
-                <p class="text-muted small mb-3">
-                    {{#str}}user_download_help, block_download_certificates{{/str}}
-                </p>
-                <form method="post"
-                      action="{{download_user_url}}"
-                      data-download-type="user"
-                      data-cert-count="0"
-                      data-async-threshold="{{async_threshold}}"
-                      class="form-inline flex-wrap">
-                    <input type="hidden" name="action" value="download_user">
-                    <input type="hidden" name="sesskey" value="{{sesskey}}">
-                    <div class="form-group mr-3 mb-2 flex-grow-1" style="min-width: 250px;">
-                        <select id="user_select" name="userid"
-                                class="form-control w-100" required>
-                            <option value="">{{#str}}choose_user, block_download_certificates{{/str}}</option>
-                            {{#users}}
-                            <option value="{{id}}" data-count="{{certificate_count}}">
-                                {{fullname}} ({{certificate_count}} {{#str}}certificates, block_download_certificates{{/str}})
-                            </option>
-                            {{/users}}
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary mb-2">
-                        <i class="fa fa-download mr-1"></i>
-                        {{#str}}download_user_certificates, block_download_certificates{{/str}}
-                    </button>
-                </form>
-            </div>
-            {{/has_users}}
-        </div>
-    </div>
-    {{/has_certificates}}
-
-    {{! ================================================================ }}
-    {{! TABLEAU DES CERTIFICATS : Chargement dynamique AJAX             }}
-    {{! ================================================================ }}
-    <div class="card cert-table-card">
-        <div class="card-header">
-            <div class="d-flex flex-wrap align-items-center justify-content-between">
-                {{! Compteur de résultats }}
-                <div class="d-flex align-items-center">
-                    <h5 class="mb-0 mr-3">
-                        <i class="fa fa-list mr-1"></i>
-                        {{#str}}certificates, block_download_certificates{{/str}}
-                    </h5>
-                    <span id="cert-result-count" class="badge badge-light bg-light text-dark" aria-live="polite">
-                        {{total_count}} {{#str}}certificates, block_download_certificates{{/str}}
-                    </span>
-                </div>
-
-                {{! Recherche + sélecteur de pagination }}
-                <div class="d-flex align-items-center mt-2 mt-md-0">
-                    <div class="cert-search-group">
-                        <span class="cert-search-icon">
-                            <i class="fa fa-search"></i>
-                        </span>
-                        <input type="search" id="cert-search-input"
-                               class="cert-search-input"
-                               placeholder="{{#str}}search, core{{/str}}..."
-                               aria-label="Search">
-                        <button class="cert-search-clear" type="button"
-                                id="cert-search-clear" title="Clear">
-                            <i class="fa fa-times"></i>
-                        </button>
-                    </div>
-
-                    <select id="cert-perpage" class="cert-perpage-select">
-                        <option value="25">25</option>
-                        <option value="50" selected>50</option>
-                        <option value="100">100</option>
-                        <option value="200">200</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div class="card-body p-0">
-            {{! Conteneur du tableau — peuplé par certificate_table.js }}
-            <div id="cert-table-container" aria-live="polite">
-                {{#has_certificates}}
-                <div class="text-center py-4">
-                    <i class="fa fa-spinner fa-spin fa-2x text-primary"></i>
-                    <p class="mt-2 text-muted">{{#str}}loading, core{{/str}}</p>
-                </div>
-                {{/has_certificates}}
-                {{^has_certificates}}
-                <div class="alert alert-info text-center m-3">
-                    <i class="fa fa-info-circle fa-2x mb-2"></i>
-                    <p class="mb-0">{{#str}}teacher_no_certificates, block_download_certificates{{/str}}</p>
-                </div>
-                {{/has_certificates}}
-            </div>
-        </div>
-
-    </div>
-
+<div class="block-download-certificates-page">
+    {{> block_download_certificates/page_header}}
+    {{#hastabs}}
+    {{> block_download_certificates/filter_bar}}
+    {{/hastabs}}
+    {{> block_download_certificates/table_card}}
 </div>

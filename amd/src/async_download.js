@@ -19,7 +19,7 @@
  * revisited, in a banner; the ready archive is asked for by a POST into a hidden frame.
  *
  * The forms are marked with `data-async-threshold`, on the form or on its submit button, beside
- * `data-download-type` and `data-cert-count`.
+ * `data-download-type` and `data-cert-count`. A form with `data-confirm` asks that question first.
  *
  * @module     block_download_certificates/async_download
  * @copyright  2025 E-learning Touch <contact@elearningtouch.com>
@@ -38,6 +38,12 @@ import {getStrings} from 'core/str';
 const COMPONENT = 'block_download_certificates';
 const TEMPLATE = 'block_download_certificates/task_progress';
 const FRAME = 'block-download-certificates-frame';
+
+/** @type {string} The class of the progress dialogue, which the stylesheet's tokens are declared on. */
+const MODAL_CLASS = 'block-download-certificates-modal';
+
+/** @type {string} The root of the plugin's pages, where a banner goes first. */
+const PAGE_SELECTOR = '.block-download-certificates-page';
 
 /** @type {number} Milliseconds between two status requests. */
 const POLL_DELAY = 3000;
@@ -91,6 +97,12 @@ const STRINGS = {
     readyuser: 'async_zip_ready_label_user',
     readycohort: 'async_zip_ready_label_cohort',
     readyrange: 'async_zip_ready_label_range',
+};
+
+/** @type {Object} Label name => core string identifier. */
+const CORE_STRINGS = {
+    confirm: 'confirm',
+    download: 'download',
 };
 
 /** @type {Object} Request type => the label of its ready archive. */
@@ -296,7 +308,7 @@ const attach = (root, task) => {
  * @returns {Promise}
  */
 const showBanner = async(task) => {
-    const container = document.querySelector('.block-download-certificat-main')
+    const container = document.querySelector(PAGE_SELECTOR)
         || document.getElementById('region-main')
         || document.body;
     const {html, js} = await renderProgress(task, true);
@@ -318,6 +330,7 @@ const showDialogue = async(task) => {
         show: true,
         removeOnClose: true,
     });
+    modal.getRoot()[0].classList.add(MODAL_CLASS);
     const root = modal.getBody()[0].querySelector('[data-region="task-progress"]');
     attach(root, task);
     modal.getRoot().on(ModalEvents.hidden, () => {
@@ -535,13 +548,46 @@ const formArgs = (form, type) => {
 };
 
 /**
- * Queue a marked form's request instead of posting it when it reaches the threshold.
+ * Ask a form's question in a core dialogue, then submit it again, answered.
+ *
+ * @param {HTMLFormElement} form The form.
+ * @param {HTMLElement|null} submitter The button that submitted it.
+ * @returns {Promise}
+ */
+const confirmThenSubmit = async(form, submitter) => {
+    try {
+        await Notification.saveCancelPromise(strings.confirm, form.dataset.confirm, strings.download, {
+            triggerElement: submitter,
+        });
+    } catch (error) {
+        // Cancelled: nothing is requested.
+        return;
+    }
+    form.dataset.confirmed = 'true';
+    if (submitter) {
+        form.requestSubmit(submitter);
+    } else {
+        form.requestSubmit();
+    }
+};
+
+/**
+ * Ask a form's confirmation first, then queue its request instead of posting it when it reaches the
+ * threshold.
  *
  * @param {Event} event The submit event.
  */
 const onSubmit = (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) {
+        return;
+    }
+    if (form.dataset.confirmed === 'true') {
+        // Answered once for this submission: the next one asks again.
+        delete form.dataset.confirmed;
+    } else if (form.dataset.confirm) {
+        event.preventDefault();
+        confirmThenSubmit(form, event.submitter || null).catch(Notification.exception);
         return;
     }
     const marker = markerOf(form);
@@ -616,8 +662,12 @@ export const init = async(config) => {
     initialised = true;
     userid = config.userid;
     try {
-        const values = await getStrings(Object.values(STRINGS).map((key) => ({key, component: COMPONENT})));
-        Object.keys(STRINGS).forEach((name, index) => {
+        const requests = [
+            ...Object.values(STRINGS).map((key) => ({key, component: COMPONENT})),
+            ...Object.values(CORE_STRINGS).map((key) => ({key, component: 'core'})),
+        ];
+        const values = await getStrings(requests);
+        [...Object.keys(STRINGS), ...Object.keys(CORE_STRINGS)].forEach((name, index) => {
             strings[name] = values[index];
         });
     } catch (error) {

@@ -9,7 +9,7 @@ The history up to upstream release 1.6.1 (version 2026100700) is in the upstream
 
 ## Unreleased
 
-Fleet adoption, stages 0, 1a, 1b and 2 (`docs/fleet-audit-2026-10-21.md`).
+Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
 ### Added
 
@@ -29,6 +29,15 @@ Fleet adoption, stages 0, 1a, 1b and 2 (`docs/fleet-audit-2026-10-21.md`).
   event `zip_requested`, logged for every queued background download; templates
   `certificate_rows` and `task_progress`; tests for each web service, the event and the download
   scripts' guards.
+- Stage 3: the block's templates (`block_content` with the `block_manager`, `block_teacher` and
+  `block_personal` sections, and `zip_form`, which the pages' header shares) and the pages' shared
+  partials (`page_header`, `filter_bar`, `table_card`, `search_bar`), each with an example context;
+  `classes/output/` builds their contexts; `classes/local/bootstrap.php` marks the plugin's pages on
+  Moodle 4.5 for a Bootstrap 4 polyfill in `styles.css`; tests for the block's content on every page
+  it stands on, for every template rendered with the context the plugin builds for it, and a scan of
+  the markup, the modules and the stylesheet (Bootstrap names, data-API attributes, inline styles
+  and handlers, selector qualification, colour tokens, reduced motion). New strings for the search
+  field, the per-page menu, the block's course and profile sections and the certificate list.
 
 ### Changed
 
@@ -52,9 +61,36 @@ Fleet adoption, stages 0, 1a, 1b and 2 (`docs/fleet-audit-2026-10-21.md`).
   failures in a row or an hour; dismissed banners are remembered per user. The teacher page queues
   large course downloads in the background too (F15), and the block's download buttons do the same
   from the threshold on. ZIP downloads are POST forms.
+- Stage 3: the block follows the page it stands on. The dashboard and the front page show the
+  site-wide summary; on a course page a manager's numbers count that course and "download all" asks
+  for the course's ZIP, and a user's own certificates of that course are listed one by one; a user
+  profile lists that user's certificates within the viewer's scope, with a ZIP of exactly those, and
+  the block shows nothing when the scope does not reach that user (F9).
+- Stage 3: the block is rendered by templates instead of 46 `html_writer` calls (F7), and the two
+  pages share their header, download tabs, search bar and table instead of two copies (F30).
+- Stage 3: Bootstrap 5 names throughout (`ms-*`/`me-*`, `visually-hidden`, `form-select`, `mb-3`
+  rows and flex utilities instead of `form-group`/`form-inline`, badges that state their text
+  colour, `data-bs-toggle` alone); on Moodle 4.5 the pages get the names its bridge lacks from a
+  polyfill gated on a body class, and the tabs the attribute Bootstrap 4 listens to (F10, F11). The
+  block uses no name the polyfill provides, since it cannot mark the pages it stands on.
+- Stage 3: `styles.css` rewritten: theme tokens with fallback chains, a text colour with every
+  background (dark mode), every selector qualified by a plugin class, the row animation only
+  without reduced motion, tabular figures for numbers; the `.pagination` overrides and the rules of
+  the removed hand-built dialogue and banner are gone (F16, F17).
+- Stage 3: accessibility: every select and input has a label, icon-only buttons a localised name,
+  decorative icons are hidden from assistive technology, tabs carry their roles, controls and
+  selected state, and the progress dialogue has a plugin class for its tokens (F14).
+- Stage 3: course and cohort names in the pages' menus are formatted without escaping, so the
+  template escapes them once.
 
 ### Fixed
 
+- Stage 3: "Download all" asked its confirmation through an inline `onclick` that broke on an
+  apostrophe in a translation; the question is a data attribute that the background download module
+  asks in a core dialogue (F13). Inline widths and `display: none` became classes and the `hidden`
+  attribute.
+- Stage 3: `index.php` loaded `styles.css` a second time over the theme's copy, and so did
+  `index_teacher.php` (F18).
 - Stage 2: the log entry of a queued background download now says what was requested: the owner of
   a user request is its related user, and the course, group, cohort or days of the request are in
   the entry and its description.

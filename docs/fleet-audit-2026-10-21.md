@@ -214,8 +214,14 @@ scripts, both AMD modules are ES modules on core APIs, no sesskey in any URL, ZI
 PHPUnit 118 tests, 627 assertions on the same three legs; eslint clean; grunt still stops at
 stylelint and mustache at the two old page templates (stage 3).
 
-Next: stage 3
-(rendering), 4 (comment pass, Behat, `mdl mutate --fast`), 5 (branch split and matrix).
+Stage 3 (2026-10-22, contract `docs/stage3-design.md`): the block and both pages rendered by
+templates (no `html_writer`), placement-scoped block, Bootstrap 5 names with the 4.5 polyfill on the
+plugin's own pages, theme tokens, accessibility. Every gate green for the first time on
+4.5/8.3/pgsql and 5.3/8.4/pgsql (codebase, phplint, phpcs, leftover, phpdoc, validate, savepoints,
+mustache, grunt, phpunit) and PHPUnit on 5.3/8.4/mariadb: 144 tests, 834 assertions.
+
+Next: stage 4 (comment pass over every file, Behat smoke, `mdl mutate --fast` over the guards, the
+block's name-escaping test), then stage 5 (branch split, matrix on every branch, releases).
 
 Open:
 - Owner decision: the group rule reads the course's group mode, not the certificate activity's.
