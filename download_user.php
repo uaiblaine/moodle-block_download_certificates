@@ -33,7 +33,7 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login(null, false);
 request::reject_guest();
-require_sesskey();
+request::require_post_sesskey();
 
 $action = required_param('action', PARAM_ALPHANUMEXT);
 $userid = optional_param('userid', 0, PARAM_INT);
@@ -44,7 +44,8 @@ $PAGE->set_url('/blocks/download_certificates/download_user.php');
 $scope = scope::for_user((int) $USER->id);
 try {
     if ($action === 'download_my_certificates') {
-        require_capability('block/download_certificates:view', context_system::instance());
+        // Own certificates are always in scope; `:view` is a block capability that the system
+        // context does not decide.
         $userid = (int) $USER->id;
     } else if ($action !== 'download_user') {
         throw new moodle_exception('invalidaction', 'block_download_certificates');

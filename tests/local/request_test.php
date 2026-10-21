@@ -138,8 +138,8 @@ final class request_test extends \advanced_testcase {
     }
 
     /**
-     * A request keeps only the keys its type means; the async script's range epochs (UTC midnight of
-     * the picked days) become the user's calendar days.
+     * A request keeps only the keys its type means; a range's `Y-m-d` days become the user's
+     * calendar days.
      */
     public function test_filter_for_type_keeps_the_types_keys(): void {
         $posted = ['courseid' => '7', 'groupid' => 3, 'userid' => 9, 'cohortid' => 4, 'scope' => 'everything'];
@@ -154,14 +154,19 @@ final class request_test extends \advanced_testcase {
         $this->assertSame((new filter())->to_array(), request::filter_for_type('all', $posted)->to_array());
 
         $range = request::filter_for_type('range', [
-            'startdate' => gmmktime(0, 0, 0, 3, 10, 2026),
-            'enddate' => gmmktime(0, 0, 0, 3, 11, 2026) + 86399,
+            'startdate' => '2026-03-10',
+            'enddate' => '2026-03-11',
+            'datefrom' => 1,
         ], new \DateTimeZone('America/Sao_Paulo'));
         $this->assertSame(gmmktime(3, 0, 0, 3, 10, 2026), $range->datefrom);
         $this->assertSame(gmmktime(3, 0, 0, 3, 12, 2026), $range->dateto);
 
         $this->assertSame('invalidtype', $this->error_of(fn() => request::filter_for_type('everything', $posted)));
         $this->assertSame('invalidaterange', $this->error_of(fn() => request::filter_for_type('range', [])));
+        $this->assertSame(
+            'invalidaterange',
+            $this->error_of(fn() => request::filter_for_type('range', ['startdate' => '2026-03-10', 'enddate' => ['x']]))
+        );
     }
 
     /**
@@ -332,32 +337,67 @@ final class request_test extends \advanced_testcase {
     }
 
     /**
-     * The search page maps the library's rows to the table script's shape: the type under
-     * `cert_type`, a single download by type and issue id, the page size kept in bounds.
+     * The search page maps the library's rows to the web service's shape: names formatted but not
+     * escaped, the source's name, a single download by type and issue id without a session key, the
+     * page size kept in bounds; the filter narrows.
      */
     public function test_search_page_shape(): void {
         if (!(new tool_certificate())->is_available()) {
             $this->markTestSkipped('tool_certificate is not installed.');
         }
-        $owner = $this->getDataGenerator()->create_user(['firstname' => 'Ada', 'lastname' => 'Lovelace']);
+        $owner = $this->getDataGenerator()->create_user(['firstname' => 'Ada & Co', 'lastname' => 'Lovelace']);
         $this->setUser($owner);
-        $template = issue_factory::tool_certificate_template('Gold')->get_id();
+        $template = issue_factory::tool_certificate_template('Gold & "Silver"')->get_id();
         $issueid = issue_factory::tool_certificate_issue($template, (int) $owner->id, 0, 1000, 'CODE1');
         $repository = new repository(['tool_certificate' => new tool_certificate()]);
+        $scope = scope::for_user((int) $owner->id);
 
-        $page = request::search_page(scope::for_user((int) $owner->id), '', 0, 5000, 'cert_type', 'ASC', $repository);
+        $page = request::search_page($scope, new filter(), 0, 5000, 'cert_type', 'ASC', $repository);
 
-        $this->assertTrue($page['success']);
         $this->assertSame(1, $page['total']);
         $this->assertSame(200, $page['perpage']);
         $this->assertSame(1, $page['pages']);
-        $row = $page['data'][0];
-        $this->assertSame('tool_certificate', $row['cert_type']);
-        $this->assertSame('Ada Lovelace', $row['username']);
+        $row = $page['rows'][0];
+        $this->assertSame('tool_certificate', $row['type']);
+        $this->assertSame((new tool_certificate())->get_name(), $row['typename']);
+        $this->assertSame('Ada & Co Lovelace', $row['fullname']);
+        $this->assertSame('Gold & "Silver"', $row['templatename']);
         $this->assertSame('CODE1', $row['code']);
-        $url = new \moodle_url($row['download_url']);
+        $this->assertSame(1000, $row['timecreated']);
+        $url = new \moodle_url($row['downloadurl']);
         $this->assertStringEndsWith('/blocks/download_certificates/download_precise.php', $url->get_path(false));
-        $this->assertSame('tool_certificate', $url->get_param('type'));
-        $this->assertSame((string) $issueid, (string) $url->get_param('issueid'));
+        $this->assertSame(['type' => 'tool_certificate', 'issueid' => (string) $issueid], $url->params());
+
+        // The filter narrows: a search that matches nothing leaves no row.
+        $none = request::search_page($scope, new filter(search: 'no such text'), 0, 50, 'timecreated', 'DESC', $repository);
+        $this->assertSame(0, $none['total']);
+        $this->assertSame([], $none['rows']);
+    }
+
+    /**
+     * The ZIP pages accept a session key from a POST body only: one in the URL, a wrong one or none
+     * is refused.
+     */
+    public function test_require_post_sesskey(): void {
+        $this->setUser($this->getDataGenerator()->create_user());
+        $refused = fn() => $this->error_of(fn() => request::require_post_sesskey());
+
+        $_POST = [];
+        $_GET = ['sesskey' => sesskey()];
+        $this->assertSame('invalidsesskey', $refused());
+
+        $_POST = ['action' => 'download_all'];
+        $this->assertSame('invalidsesskey', $refused());
+
+        $_POST = ['sesskey' => 'wrong'];
+        $this->assertSame('invalidsesskey', $refused());
+
+        $_POST = ['sesskey' => ['array']];
+        $this->assertSame('invalidsesskey', $refused());
+
+        // The control: the key in the body passes.
+        $_GET = [];
+        $_POST = ['sesskey' => sesskey()];
+        $this->assertNull($refused());
     }
 }

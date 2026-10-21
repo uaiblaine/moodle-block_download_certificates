@@ -6,7 +6,7 @@
     - Dashboard stats header with total count
     - Download All button (async-capable)
     - Tabbed download filters (date range, course, cohort, user)
-    - Dynamic AJAX-loaded table with search, sort, and pagination
+    - Table with search, sort, and pagination, loaded by certificate_table.js
 
     @package block_download_certificates
     @copyright 2025 E-learning Touch <contact@elearningtouch.com>
@@ -38,16 +38,19 @@
 
                 {{! Download All button }}
                 {{#has_certificates}}
-                <div class="mt-2 mt-md-0">
-                    <a href="{{download_all_url}}"
+                <form method="post" action="{{download_all_url}}" class="mt-2 mt-md-0"
+                      data-download-type="all"
+                      data-cert-count="{{total_count}}"
+                      data-async-threshold="{{async_threshold}}">
+                    <input type="hidden" name="action" value="download_all">
+                    <input type="hidden" name="sesskey" value="{{sesskey}}">
+                    <button type="submit"
                        class="btn btn-primary btn-download-all"
-                       data-download-all="1"
-                       data-cert-count="{{total_count}}"
                        onclick="return confirm('{{#str}}confirm_download_all, block_download_certificates{{/str}}')">
                         <i class="fa fa-download mr-1"></i>
                         {{#str}}download_all_certificates, block_download_certificates{{/str}}
-                    </a>
-                </div>
+                    </button>
+                </form>
                 {{/has_certificates}}
             </div>
         </div>
@@ -111,11 +114,11 @@
                 <p class="text-muted small mb-3">
                     {{#str}}date_range_help, block_download_certificates{{/str}}
                 </p>
-                <form method="get"
+                <form method="post"
                       action="{{download_range_url}}"
                       data-download-type="range"
                       data-cert-count="{{total_count}}"
-                      data-download-params='{}'
+                      data-async-threshold="{{async_threshold}}"
                       class="form-inline flex-wrap">
                     <input type="hidden" name="sesskey" value="{{sesskey}}">
                     <div class="form-group mr-3 mb-2">
@@ -145,11 +148,11 @@
                 <p class="text-muted small mb-3">
                     {{#str}}course_download_help, block_download_certificates{{/str}}
                 </p>
-                <form method="get"
+                <form method="post"
                       action="{{download_course_url}}"
                       data-download-type="course"
                       data-cert-count="0"
-                      data-download-params='{}'
+                      data-async-threshold="{{async_threshold}}"
                       class="form-inline flex-wrap">
                     <input type="hidden" name="action" value="download_course">
                     <input type="hidden" name="sesskey" value="{{sesskey}}">
@@ -178,11 +181,11 @@
                 <p class="text-muted small mb-3">
                     {{#str}}cohort_download_help, block_download_certificates{{/str}}
                 </p>
-                <form method="get"
+                <form method="post"
                       action="{{download_cohort_url}}"
                       data-download-type="cohort"
                       data-cert-count="0"
-                      data-download-params='{}'
+                      data-async-threshold="{{async_threshold}}"
                       class="form-inline flex-wrap">
                     <input type="hidden" name="action" value="download_cohort">
                     <input type="hidden" name="sesskey" value="{{sesskey}}">
@@ -211,11 +214,11 @@
                 <p class="text-muted small mb-3">
                     {{#str}}user_download_help, block_download_certificates{{/str}}
                 </p>
-                <form method="get"
+                <form method="post"
                       action="{{download_user_url}}"
                       data-download-type="user"
                       data-cert-count="0"
-                      data-download-params='{}'
+                      data-async-threshold="{{async_threshold}}"
                       class="form-inline flex-wrap">
                     <input type="hidden" name="action" value="download_user">
                     <input type="hidden" name="sesskey" value="{{sesskey}}">
@@ -253,7 +256,7 @@
                         <i class="fa fa-list mr-1"></i>
                         {{#str}}certificates, block_download_certificates{{/str}}
                     </h5>
-                    <span id="cert-result-count" class="badge badge-light bg-light text-dark">
+                    <span id="cert-result-count" class="badge badge-light bg-light text-dark" aria-live="polite">
                         {{total_count}} {{#str}}certificates, block_download_certificates{{/str}}
                     </span>
                 </div>
@@ -288,7 +291,7 @@
 
         <div class="card-body p-0">
             {{! Table container — populated by certificate_table.js }}
-            <div id="cert-table-container">
+            <div id="cert-table-container" aria-live="polite">
                 {{#has_certificates}}
                 <div class="text-center py-4">
                     <i class="fa fa-spinner fa-spin fa-2x text-primary"></i>
@@ -305,8 +308,6 @@
             </div>
         </div>
 
-        {{! Pagination — populated by certificate_table.js }}
-        <div class="card-footer" id="cert-pagination"></div>
     </div>
 
 </div>

@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * AJAX endpoint to download the generated ZIP file.
+ * Hand over a ready background ZIP to its owner; the task id and the session key come in a POST body.
  *
  * @package   block_download_certificates
  * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
@@ -31,16 +31,16 @@ require_once($CFG->libdir . '/filelib.php');
 
 require_login(null, false);
 request::reject_guest();
-require_sesskey();
+request::require_post_sesskey();
 
 $taskid = required_param('taskid', PARAM_INT);
 
 $PAGE->set_context(context_system::instance());
-$PAGE->set_url('/blocks/download_certificates/ajax/download_zip.php', ['taskid' => $taskid]);
+$PAGE->set_url('/blocks/download_certificates/ajax/download_zip.php');
 
-[$zippath, $filename] = zip_tasks::prepare_download($taskid, (int) $USER->id);
-
-// Expired once the bytes went out: shutdown functions run after send_temp_file() ends the request.
-// An interrupted transfer expires the task too, and the user requests the archive again.
-\core\shutdown_manager::register_function([zip_tasks::class, 'expire'], [$taskid]);
+// The row is claimed (ready to expired) before sending, so a second request for it is refused.
+// send_temp_file() deletes the file and ends the request, so nothing can run after it: the expired
+// row's task directory is removed by the cleanup_expired task, which deletes the directory of every
+// expired row. An interrupted transfer costs the archive; the user requests it again.
+[$zippath, $filename] = zip_tasks::claim_download($taskid, (int) $USER->id);
 send_temp_file($zippath, $filename);

@@ -181,8 +181,9 @@ final class zip_tasks_test extends \advanced_testcase {
         file_put_contents(task_storage::get_zip_path($ready), 'zip');
         $pending = $this->add_task($owner, zip_tasks::STATUS_PENDING, (int) $course->id);
 
-        $this->assertSame('accessdenied', $this->error_of(fn() => zip_tasks::get_status($ready, $other)));
-        $this->assertSame('accessdenied', $this->error_of(fn() => zip_tasks::prepare_download($ready, $other)));
+        // Another user's row answers as a missing one, so ids cannot be probed.
+        $this->assertSame('tasknotfound', $this->error_of(fn() => zip_tasks::get_status($ready, $other)));
+        $this->assertSame('tasknotfound', $this->error_of(fn() => zip_tasks::prepare_download($ready, $other)));
         $this->assertSame('tasknotfound', $this->error_of(fn() => zip_tasks::prepare_download($ready + 1000, $owner)));
         $this->assertSame('tasknotready', $this->error_of(fn() => zip_tasks::prepare_download($pending, $owner)));
 
@@ -191,7 +192,12 @@ final class zip_tasks_test extends \advanced_testcase {
         $this->assertSame('certificates_course_' . $course->id . '.zip', $filename);
         $status = zip_tasks::get_status($ready, $owner);
         $this->assertSame(zip_tasks::STATUS_READY, $status['status']);
-        $this->assertStringContainsString('taskid=' . $ready, $status['download_url']);
+        $this->assertSame('', $status['errormessage']);
+        // The download script takes the task id and the session key in a POST body: the URL carries neither.
+        $url = new \moodle_url($status['downloadurl']);
+        $this->assertStringEndsWith('/blocks/download_certificates/ajax/download_zip.php', $url->get_path(false));
+        $this->assertSame([], $url->params());
+        $this->assertSame('', zip_tasks::get_status($pending, $owner)['downloadurl']);
     }
 
     /**
@@ -238,6 +244,52 @@ final class zip_tasks_test extends \advanced_testcase {
     }
 
     /**
+     * A ready archive is claimed once: the first claim returns the path and expires the row, a
+     * second claim is refused; another user's row and a row that is not ready are refused.
+     */
+    public function test_claim_download_hands_the_archive_over_once(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $owner = (int) $this->getDataGenerator()->create_user()->id;
+        $this->getDataGenerator()->enrol_user($owner, $course->id, 'editingteacher');
+        $other = (int) $this->getDataGenerator()->create_user()->id;
+        $ready = $this->add_task($owner, zip_tasks::STATUS_READY, (int) $course->id);
+        file_put_contents(task_storage::get_zip_path($ready), 'zip');
+        $pending = $this->add_task($owner, zip_tasks::STATUS_PENDING, (int) $course->id);
+
+        $this->assertSame('tasknotfound', $this->error_of(fn() => zip_tasks::claim_download($ready, $other)));
+        $this->assertSame('tasknotready', $this->error_of(fn() => zip_tasks::claim_download($pending, $owner)));
+        $this->assertSame(zip_tasks::STATUS_READY, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $ready]));
+
+        [$zippath, $filename] = zip_tasks::claim_download($ready, $owner);
+        $this->assertSame(task_storage::get_zip_path($ready), $zippath);
+        $this->assertSame('certificates_course_' . $course->id . '.zip', $filename);
+        $this->assertSame(zip_tasks::STATUS_EXPIRED, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $ready]));
+
+        $this->assertSame('tasknotready', $this->error_of(fn() => zip_tasks::claim_download($ready, $owner)));
+    }
+
+    /**
+     * A request that lost the claim to another one between its checks and its write is refused: the
+     * row was expired by someone else while this one still held the ready row it read.
+     */
+    public function test_claim_loses_to_a_concurrent_claim(): void {
+        $owner = (int) $this->getDataGenerator()->create_user()->id;
+        $ready = $this->add_task($owner, zip_tasks::STATUS_READY);
+
+        $this->assertTrue(zip_tasks::update_if_status($ready, zip_tasks::STATUS_READY, [
+            'status' => zip_tasks::STATUS_EXPIRED,
+            'timemodified' => time(),
+        ]));
+        // The conditional write of a second claimant finds the row no longer ready.
+        $this->assertFalse(zip_tasks::update_if_status($ready, zip_tasks::STATUS_READY, [
+            'status' => zip_tasks::STATUS_EXPIRED,
+            'timemodified' => time(),
+        ]));
+    }
+
+    /**
      * Expiring a row removes its directory and nobody else's.
      */
     public function test_expire_removes_the_rows_directory_only(): void {
@@ -273,12 +325,12 @@ final class zip_tasks_test extends \advanced_testcase {
         $this->assertDirectoryDoesNotExist(task_storage::get_directory($taskid));
         $status = zip_tasks::get_status($taskid, $owner);
         $this->assertSame(zip_tasks::STATUS_FAILED, $status['status']);
-        $this->assertSame(get_string('taskerror_noaccess', 'block_download_certificates'), $status['error_message']);
+        $this->assertSame(get_string('taskerror_noaccess', 'block_download_certificates'), $status['errormessage']);
 
         $DB->set_field(zip_tasks::TABLE, 'error', 'SQLSTATE[42P01]: relation "x" does not exist', ['id' => $taskid]);
         $this->assertSame(
             get_string('taskerror_unexpected', 'block_download_certificates'),
-            zip_tasks::get_status($taskid, $owner)['error_message']
+            zip_tasks::get_status($taskid, $owner)['errormessage']
         );
     }
 

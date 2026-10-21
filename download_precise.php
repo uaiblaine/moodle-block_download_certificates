@@ -17,6 +17,8 @@
 /**
  * Download one certificate after the scope check.
  *
+ * A read like pluginfile.php: a GET link without a session key, refused outside the scope.
+ *
  * @package   block_download_certificates
  * @copyright 2015 Manieer Chhettri
  * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
@@ -32,7 +34,6 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login(null, false);
 request::reject_guest();
-require_sesskey();
 
 $type = optional_param('type', 'tool_certificate', PARAM_ALPHANUMEXT);
 $issueid = required_param('issueid', PARAM_INT);

@@ -42,7 +42,7 @@ final class request {
     /** @var string[] The types that reach beyond the courses a teacher holds. */
     private const MANAGER_TYPES = ['all', 'cohort', 'range'];
 
-    /** @var array Sort keys the table script sends that the repository names differently. */
+    /** @var array Sort keys a client may send that the repository names differently. */
     private const SORT_ALIASES = ['cert_type' => 'type'];
 
     /**
@@ -83,7 +83,7 @@ final class request {
     }
 
     /**
-     * The repository sort key for the one the table script sends.
+     * The repository sort key for the one a client sends.
      *
      * @param string $sort The cleaned request value.
      * @return string
@@ -93,20 +93,24 @@ final class request {
     }
 
     /**
-     * One page of the certificates table, in the shape the table script reads.
+     * One page of the certificates table, as the search web service returns it.
+     *
+     * Names and texts are formatted without escaping: the client escapes them once, when its
+     * template renders them.
      *
      * @param scope $scope Who is asking.
-     * @param string $search The search text.
+     * @param filter $filter What to keep; it only narrows the scope.
      * @param int $page The page, from 0.
      * @param int $perpage Rows per page, kept between 10 and 200.
-     * @param string $sort The sort key the script sends.
+     * @param string $sort The sort key the client sends.
      * @param string $order `ASC` or `DESC`.
      * @param repository|null $repository The repository to read from; null for the available sources.
-     * @return array success, data (rows), total, page, perpage, pages.
+     * @return array rows, total, page, perpage, pages; each row as
+     *         {@see \block_download_certificates\external\search_certificates::execute_returns()}.
      */
     public static function search_page(
         scope $scope,
-        string $search,
+        filter $filter,
         int $page,
         int $perpage,
         string $sort,
@@ -116,47 +120,44 @@ final class request {
         $repository = $repository ?? new repository();
         $page = max(0, $page);
         $perpage = min(max($perpage, 10), 200);
-        $filter = new filter(search: $search);
 
         $total = $repository->count($scope, $filter);
-        $rows = $repository->search($scope, $filter, self::sort_key($sort), $order, $page * $perpage, $perpage);
+        $records = $repository->search($scope, $filter, self::sort_key($sort), $order, $page * $perpage, $perpage);
 
+        $sources = $repository->get_sources();
         $system = \context_system::instance();
         $unknown = get_string('unknown', 'block_download_certificates');
-        $data = [];
-        foreach ($rows as $row) {
+        $plain = ['context' => $system, 'escape' => false];
+        $rows = [];
+        foreach ($records as $row) {
             $coursecontext = $row->courseid ? \context_course::instance($row->courseid, IGNORE_MISSING) : false;
+            // A read like pluginfile.php: the link carries no session key.
             $downloadurl = new \moodle_url('/blocks/download_certificates/download_precise.php', [
                 'type' => $row->type,
                 'issueid' => $row->issueid,
-                'sesskey' => sesskey(),
             ]);
-            $data[] = [
-                'id' => $row->uniqueid,
-                'cert_type' => $row->type,
-                'username' => fullname($row),
-                'email' => $row->email,
+            $rows[] = [
+                'uniqueid' => $row->uniqueid,
+                'type' => $row->type,
+                'typename' => isset($sources[$row->type]) ? $sources[$row->type]->get_name() : $row->type,
+                'userid' => $row->userid,
+                'fullname' => format_string(fullname($row), true, $plain),
+                'email' => clean_param((string) $row->email, PARAM_TEXT),
                 'coursename' => format_string(
                     $row->coursename !== '' ? $row->coursename : $unknown,
                     true,
-                    ['context' => $coursecontext ?: $system]
+                    ['context' => $coursecontext ?: $system, 'escape' => false]
                 ),
-                'templatename' => format_string(
-                    $row->templatename !== '' ? $row->templatename : $unknown,
-                    true,
-                    ['context' => $system]
-                ),
-                'code' => $row->code,
-                'timecreated' => userdate($row->timecreated),
-                'timecreated_raw' => $row->timecreated,
-                'userid' => $row->userid,
-                'download_url' => $downloadurl->out(false),
+                'templatename' => format_string($row->templatename !== '' ? $row->templatename : $unknown, true, $plain),
+                'code' => clean_param($row->code, PARAM_TEXT),
+                'timecreated' => $row->timecreated,
+                'datecreated' => userdate($row->timecreated),
+                'downloadurl' => $downloadurl->out(false),
             ];
         }
 
         return [
-            'success' => true,
-            'data' => $data,
+            'rows' => $rows,
             'total' => $total,
             'page' => $page,
             'perpage' => $perpage,
@@ -173,7 +174,7 @@ final class request {
      *
      * @param scope $scope Who is asking.
      * @param int $courseid The course.
-     * @return array List of id, name (formatted in the course context).
+     * @return array List of id, name (formatted in the course context, not escaped).
      * @throws \moodle_exception `accessdenied` for a course outside the user's courses.
      */
     public static function course_groups(scope $scope, int $courseid): array {
@@ -196,17 +197,20 @@ final class request {
 
         $result = [];
         foreach ($groups as $group) {
-            $result[] = ['id' => (int) $group->id, 'name' => format_string($group->name, true, ['context' => $context])];
+            $result[] = [
+                'id' => (int) $group->id,
+                'name' => format_string($group->name, true, ['context' => $context, 'escape' => false]),
+            ];
         }
         return $result;
     }
 
     /**
-     * The filter of a ZIP request, from the values the async script posts.
+     * The filter of a ZIP request, from the values the task web service receives.
      *
      * Only the keys the type means are kept: a `course` request carries no user, an `all` request
-     * nothing. A `range` arrives as the dates the browser picked, sent as the epoch of their UTC
-     * midnight; the dates are read back and turned into a range in the user's time zone.
+     * nothing. A `range` arrives as the `Y-m-d` days the browser picked (`startdate`, `enddate`),
+     * turned into a range in the user's time zone.
      *
      * @param string $type One of {@see self::TYPES}.
      * @param array $params The decoded, untrusted values.
@@ -225,8 +229,8 @@ final class request {
             case 'cohort':
                 return filter::from_array(array_intersect_key($params, ['cohortid' => 1]));
             case 'range':
-                $start = self::date_param($params, 'start_date', 'startdate');
-                $end = self::date_param($params, 'end_date', 'enddate');
+                $start = self::day_param($params, 'startdate');
+                $end = self::day_param($params, 'enddate');
                 [$from, $to] = self::date_range($start, $end, $timezone);
                 return filter::from_array(['datefrom' => $from, 'dateto' => $to]);
         }
@@ -234,19 +238,15 @@ final class request {
     }
 
     /**
-     * A date of a range request: the `Y-m-d` string of a form, or the epoch the async script sends.
+     * A day of a range request, as the `Y-m-d` text of a date field.
      *
      * @param array $params The untrusted values.
-     * @param string $textkey The key of the `Y-m-d` string.
-     * @param string $epochkey The key of the epoch.
-     * @return string The `Y-m-d` date, or '' when neither is usable.
+     * @param string $key The key of the day.
+     * @return string The cleaned text, or '' when absent; {@see self::date_range()} refuses a malformed day.
      */
-    private static function date_param(array $params, string $textkey, string $epochkey): string {
-        if (isset($params[$textkey]) && is_scalar($params[$textkey])) {
-            return clean_param((string) $params[$textkey], PARAM_ALPHANUMEXT);
-        }
-        if (isset($params[$epochkey]) && is_numeric($params[$epochkey])) {
-            return gmdate('Y-m-d', (int) $params[$epochkey]);
+    private static function day_param(array $params, string $key): string {
+        if (isset($params[$key]) && is_scalar($params[$key])) {
+            return clean_param((string) $params[$key], PARAM_ALPHANUMEXT);
         }
         return '';
     }
@@ -417,14 +417,18 @@ final class request {
     }
 
     /**
-     * Send a JSON body with its content type; the AJAX scripts' only output.
+     * Refuse a request whose session key does not come in a POST body.
      *
-     * @param array $data The body.
+     * The ZIP pages build an archive: a link or a GET form must not trigger one, and a session key
+     * in a URL ends up in logs and the browser history.
+     *
+     * @throws \moodle_exception `invalidsesskey` for a GET request, or a missing or wrong key.
      */
-    public static function send_json(array $data): void {
-        if (!headers_sent()) {
-            header('Content-Type: application/json; charset=utf-8');
+    public static function require_post_sesskey(): void {
+        $body = data_submitted();
+        $sesskey = $body && isset($body->sesskey) && is_string($body->sesskey) ? $body->sesskey : '';
+        if ($sesskey === '' || !confirm_sesskey($sesskey)) {
+            throw new \moodle_exception('invalidsesskey');
         }
-        echo json_encode($data);
     }
 }

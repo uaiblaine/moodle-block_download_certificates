@@ -33,7 +33,7 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login(null, false);
 request::reject_guest();
-require_sesskey();
+request::require_post_sesskey();
 
 $action = required_param('action', PARAM_ALPHANUMEXT);
 $courseid = required_param('courseid', PARAM_INT);

@@ -64,10 +64,7 @@ foreach ($repository->get_cohorts($scope) as $cohort) {
 
 $data = [
     'total_count' => $totalcount,
-    'download_all_url' => new moodle_url('/blocks/download_certificates/download.php', [
-        'action' => 'download_all',
-        'sesskey' => sesskey(),
-    ]),
+    'download_all_url' => new moodle_url('/blocks/download_certificates/download.php'),
     'download_range_url' => new moodle_url('/blocks/download_certificates/download_range.php'),
     'download_course_url' => new moodle_url('/blocks/download_certificates/download_course.php'),
     'download_cohort_url' => new moodle_url('/blocks/download_certificates/download_cohort.php'),
@@ -85,57 +82,13 @@ $data = [
 ];
 $PAGE->requires->css('/blocks/download_certificates/styles.css');
 
-// Initialize certificate table JS module (dynamic AJAX table).
-$tableconfig = [
-    'sesskey' => sesskey(),
-    'total_count' => $data['total_count'],
-];
-$PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init', [$tableconfig]);
-
-// Initialize async download JS module.
-$jsconfig = [
-    'sesskey' => sesskey(),
-    'pending_tasks' => $data['pending_tasks'] ?? [],
-];
-$PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [$jsconfig]);
-
-// Strings for JS modules.
-$PAGE->requires->strings_for_js([
-    // Async download strings.
-    'async_generating',
-    'async_preparing',
-    'async_processing',
-    'async_ready',
-    'async_zip_ready',
-    'async_close',
-    'async_download',
-    'async_can_close',
-    'async_zip_ready_label_all',
-    'async_zip_ready_label_course',
-    'async_zip_ready_label_user',
-    'async_zip_ready_label_cohort',
-    'async_zip_ready_label_range',
-    // Table strings.
-    'certificates',
-    'template',
-    'date_created',
-    'no_certificates_found',
-    'no_search_results',
-    'type',
-    'download_certificate',
-], 'block_download_certificates');
-
-// Core strings used by certificate_table.js.
-$PAGE->requires->strings_for_js([
-    'user',
-    'email',
-    'course',
-    'actions',
-], 'core');
+$PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init');
+$PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [[
+    'userid' => (int) $USER->id,
+    'pendingtasks' => $data['pending_tasks'],
+]]);
 
 echo $OUTPUT->header();
-
-// Render the main page using mustache template.
 echo $OUTPUT->render_from_template('block_download_certificates/main_page', $data);
 
 echo $OUTPUT->footer();

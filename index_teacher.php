@@ -30,6 +30,7 @@ use block_download_certificates\local\filter;
 use block_download_certificates\local\repository;
 use block_download_certificates\local\request;
 use block_download_certificates\local\scope;
+use block_download_certificates\local\zip_tasks;
 
 require_once(__DIR__ . '/../../config.php');
 
@@ -86,38 +87,18 @@ $data = [
     'has_cohorts' => false,
     'sesskey' => sesskey(),
     'async_threshold' => download::SYNC_LIMIT,
-    'pending_tasks' => [],
+    'pending_tasks' => zip_tasks::get_pending((int) $USER->id),
     'download_course_url' => new moodle_url('/blocks/download_certificates/download_course.php'),
     'download_user_url' => new moodle_url('/blocks/download_certificates/download_user.php'),
     'is_teacher_view' => true,
 ];
 
-// The table module is the manager page's; the search script applies the teacher's scope.
-$tableconfig = [
-    'sesskey'      => sesskey(),
-    'total_count'  => $totalcount,
-    'is_teacher'   => true,
-];
-$PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init', [$tableconfig]);
-
-// Strings for the JS modules.
-$PAGE->requires->strings_for_js([
-    'certificates',
-    'template',
-    'date_created',
-    'no_certificates_found',
-    'no_search_results',
-    'type',
-    'download_certificate',
-    'all_groups',
-], 'block_download_certificates');
-
-$PAGE->requires->strings_for_js([
-    'user',
-    'email',
-    'course',
-    'actions',
-], 'core');
+// The modules are the manager page's; the web services apply the teacher's scope.
+$PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init');
+$PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [[
+    'userid' => (int) $USER->id,
+    'pendingtasks' => $data['pending_tasks'],
+]]);
 
 echo $OUTPUT->header();
 echo $OUTPUT->render_from_template('block_download_certificates/teacher_page', $data);

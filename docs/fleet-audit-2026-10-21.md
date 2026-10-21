@@ -201,6 +201,31 @@ into attributes after the split). mustache (no example contexts) and grunt (esli
 stylelint 3) stay red until stages 2 and 3 rewrite the templates, JavaScript and CSS, so the
 branch merges as a whole once every gate is green, not stage by stage.
 
+## Status (2026-10-21, end of day)
+
+Local commits on `fleet-adoption`, nothing pushed: `7c2edc9` stage 0, `ad12b22` stage 1a (data
+layer, contract `docs/stage1-design.md`), `23ac04f` stage 1b (every path rewired, legacy classes
+deleted), `9cda6d6` stage 1c (gaps of the security read). PHPUnit 98 tests, 511 assertions green on
+4.5/8.3/pgsql, 5.3/8.4/pgsql and 5.3/8.4/mariadb with both certificate plugins installed; phpcs,
+phpdoc, validate, savepoints clean; mustache and grunt red until stages 2-3.
+
+Stage 2 (2026-10-22, contract `docs/stage2-design.md`): four external functions replace the JSON
+scripts, both AMD modules are ES modules on core APIs, no sesskey in any URL, ZIP pages POST-only;
+PHPUnit 118 tests, 627 assertions on the same three legs; eslint clean; grunt still stops at
+stylelint and mustache at the two old page templates (stage 3).
+
+Next: stage 3
+(rendering), 4 (comment pass, Behat, `mdl mutate --fast`), 5 (branch split and matrix).
+
+Open:
+- Owner decision: the group rule reads the course's group mode, not the certificate activity's.
+- The certificate plugins reach `mdl ci` only through the uncommitted moodle-dev worktree
+  `~/dev/moodle-dev-dlcerts` (branch `ci-deps-download-certificates`, `bin/mdl-ci`
+  `extra_deps_for()`; clones in `~/dev/moodle-dev/deps/`): run `~/dev/moodle-dev-dlcerts/bin/mdl-ci`
+  until it is committed and merged (moodle-dev needs a pull request).
+- `ci.yml` has no `plugin-dependencies` yet, so GitHub would skip the source tests.
+- 5.x legs behind the proxy need `NPM_CONFIG_PREFER_OFFLINE=true NPM_CONFIG_IGNORE_SCRIPTS=true`.
+
 ## Stage 1 prerequisite: certificate plugins in CI
 
 Stage 1's tests need both sources installed on every leg: `plugin-dependencies` in `ci.yml`, and

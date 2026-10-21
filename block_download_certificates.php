@@ -24,6 +24,7 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_download_certificates\local\download;
 use block_download_certificates\local\filter;
 use block_download_certificates\local\repository;
 use block_download_certificates\local\scope;
@@ -40,6 +41,9 @@ use block_download_certificates\local\zip_tasks;
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class block_download_certificates extends block_base {
+    /** @var bool Whether the background download module is already on the page. */
+    private $asyncloaded = false;
+
     /**
      * Initialize block.
      */
@@ -207,46 +211,17 @@ class block_download_certificates extends block_base {
                 ['class' => 'btn btn-primary btn-sm d-block mb-2']
             );
 
-            // Quick download all button (async).
+            // Download all: a POST form, sent to the background task from the threshold on.
             if ($stats['total'] > 0) {
-                $downloadurl = new moodle_url(
-                    '/blocks/download_certificates/download.php',
-                    ['action' => 'download_all', 'sesskey' => sesskey()]
-                );
-                $content .= html_writer::link(
-                    $downloadurl,
+                $content .= $this->zip_button(
+                    'download.php',
+                    ['action' => 'download_all'],
+                    'all',
+                    $stats['total'],
                     get_string('download_all_quick', 'block_download_certificates'),
-                    [
-                        'class' => 'btn btn-success btn-sm d-block',
-                        'data-download-all' => '1',
-                        'data-cert-count' => $stats['total'],
-                    ]
+                    \core\output\single_button::BUTTON_SUCCESS,
+                    $scope
                 );
-
-                // Load async download JS module for the block.
-                $jsconfig = [
-                    'sesskey' => sesskey(),
-                    'pending_tasks' => zip_tasks::get_pending($scope->get_user_id()),
-                ];
-                $this->page->requires->js_call_amd('block_download_certificates/async_download', 'init', [$jsconfig]);
-
-                // Required JS strings for the async download module.
-                $this->page->requires->strings_for_js([
-                    'async_generating',
-                    'async_preparing',
-                    'async_processing',
-                    'async_ready',
-                    'async_zip_ready',
-                    'async_close',
-                    'async_download',
-                    'async_can_close',
-                    'async_zip_ready_label_all',
-                    'async_zip_ready_label_course',
-                    'async_zip_ready_label_user',
-                    'async_zip_ready_label_cohort',
-                    'async_zip_ready_label_range',
-                    'certificates',
-                ], 'block_download_certificates');
             }
 
             $content .= html_writer::end_div(); // Actions.
@@ -290,15 +265,7 @@ class block_download_certificates extends block_base {
 
             // Download button (only if user has certificates).
             if ($usercertcount > 0) {
-                $downloadurl = new moodle_url(
-                    '/blocks/download_certificates/download_user.php',
-                    ['action' => 'download_my_certificates', 'sesskey' => sesskey()]
-                );
-                $content .= html_writer::link(
-                    $downloadurl,
-                    get_string('download_my_certificates', 'block_download_certificates'),
-                    ['class' => 'btn btn-primary btn-sm d-block']
-                );
+                $content .= $this->own_zip_button($scope, $usercertcount, \core\output\single_button::BUTTON_PRIMARY);
             } else {
                 $content .= html_writer::div(
                     get_string('no_certificates_user', 'block_download_certificates'),
@@ -314,6 +281,75 @@ class block_download_certificates extends block_base {
                 'alert alert-danger'
             );
         }
+    }
+
+    /**
+     * The button that downloads the viewer's own certificates.
+     *
+     * @param scope $scope The viewer's scope.
+     * @param int $count The viewer's certificates within the scope.
+     * @param string $style A single_button type.
+     * @return string
+     */
+    private function own_zip_button(scope $scope, int $count, string $style): string {
+        return $this->zip_button(
+            'download_user.php',
+            ['action' => 'download_my_certificates', 'userid' => $scope->get_user_id()],
+            'user',
+            $count,
+            get_string('download_my_certificates', 'block_download_certificates'),
+            $style,
+            $scope
+        );
+    }
+
+    /**
+     * A button posting a ZIP request to a download page, with the session key in the body.
+     *
+     * The button carries what the background download module reads: from
+     * {@see download::SYNC_LIMIT} certificates on, the module queues the request instead of posting
+     * it. The module is loaded with the first such button.
+     *
+     * @param string $script The download page, in the plugin directory.
+     * @param array $params The request's values, posted as hidden fields.
+     * @param string $type The request type.
+     * @param int $count The certificates the request holds.
+     * @param string $label The button text.
+     * @param string $style A single_button type.
+     * @param scope $scope The viewer's scope.
+     * @return string
+     */
+    private function zip_button(
+        string $script,
+        array $params,
+        string $type,
+        int $count,
+        string $label,
+        string $style,
+        scope $scope
+    ): string {
+        global $OUTPUT;
+
+        if (!$this->asyncloaded) {
+            $this->asyncloaded = true;
+            $this->page->requires->js_call_amd('block_download_certificates/async_download', 'init', [[
+                'userid' => $scope->get_user_id(),
+                'pendingtasks' => zip_tasks::get_pending($scope->get_user_id()),
+            ]]);
+        }
+        $button = new \core\output\single_button(
+            new moodle_url('/blocks/download_certificates/' . $script, $params),
+            $label,
+            'post',
+            $style,
+            [
+                'data-download-type' => $type,
+                'data-cert-count' => $count,
+                'data-async-threshold' => download::SYNC_LIMIT,
+            ]
+        );
+        $button->class = 'singlebutton mb-2';
+        return $OUTPUT->render($button);
     }
 
     /**
@@ -379,15 +415,7 @@ class block_download_certificates extends block_base {
 
             // Download button (only if user has certificates).
             if ($usercertcount > 0) {
-                $downloadurl = new moodle_url(
-                    '/blocks/download_certificates/download_user.php',
-                    ['action' => 'download_my_certificates', 'sesskey' => sesskey()]
-                );
-                $content .= html_writer::link(
-                    $downloadurl,
-                    get_string('download_my_certificates', 'block_download_certificates'),
-                    ['class' => 'btn btn-outline-primary btn-sm d-block']
-                );
+                $content .= $this->own_zip_button($scope, $usercertcount, \core\output\single_button::BUTTON_SECONDARY);
             } else {
                 $content .= html_writer::div(
                     get_string('no_certificates_user', 'block_download_certificates'),

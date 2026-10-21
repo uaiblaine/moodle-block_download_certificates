@@ -9,7 +9,7 @@ The history up to upstream release 1.6.1 (version 2026100700) is in the upstream
 
 ## Unreleased
 
-Fleet adoption, stages 0, 1a and 1b (`docs/fleet-audit-2026-10-21.md`).
+Fleet adoption, stages 0, 1a, 1b and 2 (`docs/fleet-audit-2026-10-21.md`).
 
 ### Added
 
@@ -23,6 +23,12 @@ Fleet adoption, stages 0, 1a and 1b (`docs/fleet-audit-2026-10-21.md`).
   request downloads, task storage) with its tests. Nothing calls it before stage 1b.
 - Stage 1b: the block can stand on user profiles; tests for the request guards, the background
   task, the cleanup and the block's section choice; a data generator for block instances.
+- Stage 2: four web services for the pages' JavaScript,
+  `block_download_certificates_search_certificates`, `_get_groups`, `_create_task` and
+  `_get_task_status` (`db/services.php`, AJAX only, login required), version 2026100502; the
+  event `zip_requested`, logged for every queued background download; templates
+  `certificate_rows` and `task_progress`; tests for each web service, the event and the download
+  scripts' guards.
 
 ### Changed
 
@@ -38,9 +44,26 @@ Fleet adoption, stages 0, 1a and 1b (`docs/fleet-audit-2026-10-21.md`).
   and issue id. The block's numbers follow the page: a course page counts that course, a profile
   that user. Background download errors are stored as string identifiers and shown in the
   reader's language. The table's `cert_type` sort key maps to the library's `type`.
+- Stage 2: both JavaScript modules are ES modules on core's AJAX, string, template, dialogue and
+  notification modules, without jQuery. The table's headers are buttons that state their sort
+  order, the count and the table announce their changes, and a late answer to an earlier search no
+  longer replaces a newer one. A background download shows its progress in a core dialogue, polls
+  with one request at a time, waits longer after each failure and stops, saying so, after five
+  failures in a row or an hour; dismissed banners are remembered per user. The teacher page queues
+  large course downloads in the background too (F15), and the block's download buttons do the same
+  from the threshold on. ZIP downloads are POST forms.
 
 ### Fixed
 
+- Stage 2: the log entry of a queued background download now says what was requested: the owner of
+  a user request is its related user, and the course, group, cohort or days of the request are in
+  the entry and its description.
+- Stage 2: asking for the status or the archive of another user's download task answers "task not
+  found", exactly as for a task that does not exist, so task ids cannot be probed.
+- Stage 2: a ready archive is claimed (marked expired) before it is sent, so two requests for the
+  same task can no longer both receive it; its directory is removed by the hourly cleanup.
+- Stage 2: the download button stays until the server reports the archive handed over, and a
+  download that did not start shows an error instead of hiding the button.
 - The certificate table, its counts and the block's teacher count died on PostgreSQL: the
   certificate unions called `$DB->get_dbcollation()`, which only the MySQL driver has, and cast the
   type literal to `CHAR(50)`, which PostgreSQL pads with spaces.
@@ -96,6 +119,22 @@ Fleet adoption, stages 0, 1a and 1b (`docs/fleet-audit-2026-10-21.md`).
     downloads were never cleaned; the cleanup fails tasks stuck for two hours, expires archives
     after a day, deletes rows after a week and removes the directory of each, touching nothing
     outside the plugin's task directories (P9).
+- Stage 2, from the audit:
+  - Session keys travelled in URLs (single downloads, ZIP links, the ready archive); the ZIP pages
+    and the archive download now take the key from a POST body only and refuse a GET, and a single
+    download, a read like `pluginfile.php`, needs none: the scope decides (S12).
+  - Downloading one's own certificates required the block's `:view` capability in the system
+    context, which a block capability does not decide there; own certificates need a logged-in,
+    non-guest user only (S7).
+  - Server text reached the page through `innerHTML`, quoted attributes were escaped without
+    quotes, and names were escaped twice; rows and progress are rendered by templates, other text
+    is set with `textContent`, and the web services return names formatted but not escaped (F1,
+    F2, F26, S9 client side).
+  - The progress dialogue was hand-built, without focus handling, Escape or a backdrop (F3); labels
+    were hard-coded in English and French and one string id was built at run time (F5, F6).
+  - Polling ran on a fixed interval with no guard against overlapping requests or a limit (F20),
+    `localStorage` was read and written unprotected (F21), and the ready archive's URL was built in
+    JavaScript with the session key (F22).
 
 ### Removed
 
@@ -112,3 +151,6 @@ Fleet adoption, stages 0, 1a and 1b (`docs/fleet-audit-2026-10-21.md`).
   certificate sources, the HTTP self-request fallback that sent the session cookie with TLS
   verification off, and the guessed tool_certificate file lookup (D10-D14, D18, D19).
 - Language strings used only by the removed classes.
+- Stage 2: the four JSON scripts `ajax/create_task.php`, `ajax/task_status.php`,
+  `ajax/search_certificates.php` and `ajax/get_groups_for_course.php`, replaced by the web services;
+  the string `async_close`.

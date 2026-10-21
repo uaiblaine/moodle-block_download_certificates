@@ -106,53 +106,45 @@ final class zip_tasks {
      * @param int $taskid The row id.
      * @param int $userid The user asking.
      * @return \stdClass
-     * @throws \moodle_exception `tasknotfound`, or `accessdenied` for another user's row.
+     * @throws \moodle_exception `tasknotfound`, also for another user's row: task ids cannot be probed.
      */
     public static function get_owned(int $taskid, int $userid): \stdClass {
         global $DB;
 
         $task = $DB->get_record(self::TABLE, ['id' => $taskid]);
-        if (!$task) {
+        if (!$task || (int) $task->userid !== $userid) {
             throw new \moodle_exception('tasknotfound', 'block_download_certificates');
-        }
-        if ((int) $task->userid !== $userid) {
-            throw new \moodle_exception('accessdenied', 'block_download_certificates');
         }
         return $task;
     }
 
     /**
-     * The state of a row for its owner, as the status script answers it.
+     * The state of a row for its owner, as the status web service returns it.
      *
      * @param int $taskid The row id.
      * @param int $userid The user asking.
-     * @return array taskid, status, progress, total, and `download_url` when ready or
-     *         `error_message` when failed.
+     * @return array taskid, type, status, progress, total; `downloadurl` (the download script, which
+     *         takes the task id and the session key in a POST body) when ready and `errormessage`
+     *         when failed, '' otherwise.
      * @throws \moodle_exception As {@see self::get_owned()}.
      */
     public static function get_status(int $taskid, int $userid): array {
         $task = self::get_owned($taskid, $userid);
-        $response = [
-            'success' => true,
+        $ready = $task->status === self::STATUS_READY;
+        $failed = $task->status === self::STATUS_FAILED;
+        return [
             'taskid' => (int) $task->id,
+            'type' => (string) $task->type,
             'status' => (string) $task->status,
             'progress' => (int) $task->progress,
             'total' => (int) $task->total,
+            'downloadurl' => $ready ? (new \moodle_url('/blocks/download_certificates/ajax/download_zip.php'))->out(false) : '',
+            'errormessage' => $failed ? self::error_message((string) $task->error) : '',
         ];
-        if ($task->status === self::STATUS_READY) {
-            $response['download_url'] = (new \moodle_url('/blocks/download_certificates/ajax/download_zip.php', [
-                'taskid' => $task->id,
-                'sesskey' => sesskey(),
-            ]))->out(false);
-        }
-        if ($task->status === self::STATUS_FAILED) {
-            $response['error_message'] = self::error_message((string) $task->error);
-        }
-        return $response;
     }
 
     /**
-     * The owner's unfinished and ready rows, newest first, for the async script's start-up.
+     * The owner's unfinished and ready rows, newest first, for the async module's start-up.
      *
      * @param int $userid The owner.
      * @return array List of taskid, status, progress, total, type.
@@ -224,49 +216,74 @@ final class zip_tasks {
     }
 
     /**
+     * Take the one download a ready archive allows: authorise it, then claim the row.
+     *
+     * The row moves from ready to expired before any byte is sent, in one conditional statement,
+     * so of two requests for the same archive only one gets the path. The expired row's directory
+     * is removed by the scheduled cleanup, which deletes the directory of every expired row.
+     *
+     * @param int $taskid The row id.
+     * @param int $userid The user asking.
+     * @return array [string $zippath, string $filename] as {@see self::prepare_download()}.
+     * @throws \moodle_exception As {@see self::prepare_download()}, or `tasknotready` when another
+     *         request claimed the row first.
+     */
+    public static function claim_download(int $taskid, int $userid): array {
+        [$zippath, $filename] = self::prepare_download($taskid, $userid);
+        $claimed = self::update_if_status($taskid, self::STATUS_READY, [
+            'status' => self::STATUS_EXPIRED,
+            'timemodified' => time(),
+        ]);
+        if (!$claimed) {
+            throw new \moodle_exception('tasknotready', 'block_download_certificates');
+        }
+        return [$zippath, $filename];
+    }
+
+    /**
      * Update a row only while it has the status the caller expects.
      *
-     * The status check and the write are one statement, so a row that the cleanup failed meanwhile
-     * is never moved on by a task that read it earlier.
+     * The read and the write run under the row's lock, which every status writer of this class
+     * takes: a conditional UPDATE alone cannot tell its caller whether it or a concurrent writer
+     * moved the row (the DML layer reports no affected rows), so two claims of one archive would
+     * both see "expired" and both succeed.
      *
      * @param int $taskid The row id.
      * @param string $expected The status the row must still have.
      * @param array $fields Column => value; the column names come from the caller's code, never
      *        from input. A `status` entry is the status the row moves to.
-     * @return bool Whether the row has the wanted status afterwards (the new one, or `$expected`
-     *         when the write keeps it).
+     * @return bool Whether this call wrote the row.
      */
     public static function update_if_status(int $taskid, string $expected, array $fields): bool {
         global $DB;
 
-        $sets = [];
-        $params = ['bdcid' => $taskid, 'bdcexpected' => $expected];
-        foreach ($fields as $column => $value) {
-            $sets[] = "{$column} = :bdcf_{$column}";
-            $params['bdcf_' . $column] = $value;
-        }
-        $DB->execute(
-            'UPDATE {' . self::TABLE . '} SET ' . implode(', ', $sets) . ' WHERE id = :bdcid AND status = :bdcexpected',
-            $params
-        );
-        return $DB->get_field(self::TABLE, 'status', ['id' => $taskid]) === (string) ($fields['status'] ?? $expected);
+        return self::with_row_lock($taskid, function () use ($DB, $taskid, $expected, $fields): bool {
+            if ($DB->get_field(self::TABLE, 'status', ['id' => $taskid]) !== $expected) {
+                return false;
+            }
+            $DB->update_record(self::TABLE, (object) (['id' => $taskid] + $fields));
+            return true;
+        });
     }
 
     /**
      * Expire a row and remove its directory: an archive is handed over once.
      *
-     * The download script registers this to run at shutdown, after the bytes went out.
+     * For a row that is gone or unusable; a download expires its row through {@see self::claim_download()}.
      *
      * @param int $taskid The row id.
      */
     public static function expire(int $taskid): void {
         global $DB;
 
-        $DB->update_record(self::TABLE, (object) [
-            'id' => $taskid,
-            'status' => self::STATUS_EXPIRED,
-            'timemodified' => time(),
-        ]);
+        self::with_row_lock($taskid, function () use ($DB, $taskid): bool {
+            $DB->update_record(self::TABLE, (object) [
+                'id' => $taskid,
+                'status' => self::STATUS_EXPIRED,
+                'timemodified' => time(),
+            ]);
+            return true;
+        });
         task_storage::delete($taskid);
     }
 
@@ -279,13 +296,36 @@ final class zip_tasks {
     public static function fail(int $taskid, string $errorcode): void {
         global $DB;
 
-        $DB->update_record(self::TABLE, (object) [
-            'id' => $taskid,
-            'status' => self::STATUS_FAILED,
-            'error' => $errorcode,
-            'timemodified' => time(),
-        ]);
+        self::with_row_lock($taskid, function () use ($DB, $taskid, $errorcode): bool {
+            $DB->update_record(self::TABLE, (object) [
+                'id' => $taskid,
+                'status' => self::STATUS_FAILED,
+                'error' => $errorcode,
+                'timemodified' => time(),
+            ]);
+            return true;
+        });
         task_storage::delete($taskid);
+    }
+
+    /**
+     * Run a status write while holding the row's lock.
+     *
+     * @param int $taskid The row id.
+     * @param callable $write The write; returns whether it wrote.
+     * @return bool The write's result, or false when the lock could not be had in time.
+     */
+    private static function with_row_lock(int $taskid, callable $write): bool {
+        $factory = \core\lock\lock_config::get_lock_factory('block_download_certificates');
+        $lock = $factory->get_lock('task_' . $taskid, 10);
+        if (!$lock) {
+            return false;
+        }
+        try {
+            return $write();
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

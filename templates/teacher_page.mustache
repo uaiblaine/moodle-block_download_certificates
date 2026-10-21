@@ -77,9 +77,11 @@
                 <p class="text-muted small mb-3">
                     {{#str}}course_download_help, block_download_certificates{{/str}}
                 </p>
-                <form method="get"
+                <form method="post"
                       action="{{download_course_url}}"
                       data-download-type="course"
+                      data-cert-count="0"
+                      data-async-threshold="{{async_threshold}}"
                       id="form-download-course"
                       class="flex-wrap">
                     <input type="hidden" name="action" value="download_course">
@@ -128,11 +130,11 @@
                 <p class="text-muted small mb-3">
                     {{#str}}user_download_help, block_download_certificates{{/str}}
                 </p>
-                <form method="get"
+                <form method="post"
                       action="{{download_user_url}}"
                       data-download-type="user"
                       data-cert-count="0"
-                      data-download-params='{}'
+                      data-async-threshold="{{async_threshold}}"
                       class="form-inline flex-wrap">
                     <input type="hidden" name="action" value="download_user">
                     <input type="hidden" name="sesskey" value="{{sesskey}}">
@@ -170,7 +172,7 @@
                         <i class="fa fa-list mr-1"></i>
                         {{#str}}certificates, block_download_certificates{{/str}}
                     </h5>
-                    <span id="cert-result-count" class="badge badge-light bg-light text-dark">
+                    <span id="cert-result-count" class="badge badge-light bg-light text-dark" aria-live="polite">
                         {{total_count}} {{#str}}certificates, block_download_certificates{{/str}}
                     </span>
                 </div>
@@ -203,7 +205,7 @@
 
         <div class="card-body p-0">
             {{! Conteneur du tableau — peuplé par certificate_table.js }}
-            <div id="cert-table-container">
+            <div id="cert-table-container" aria-live="polite">
                 {{#has_certificates}}
                 <div class="text-center py-4">
                     <i class="fa fa-spinner fa-spin fa-2x text-primary"></i>
@@ -219,8 +221,6 @@
             </div>
         </div>
 
-        {{! Pagination — peuplé par certificate_table.js }}
-        <div class="card-footer" id="cert-pagination"></div>
     </div>
 
 </div>
