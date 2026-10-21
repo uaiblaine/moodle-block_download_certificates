@@ -17,6 +17,10 @@ Fleet adoption, stage 0 (`docs/fleet-audit-2026-10-21.md`).
   `phpcs.xml`, `.gitattributes`, `.gitignore`, `COPYING.txt`, `CLAUDE.md`, pull request template.
 - Brazilian Portuguese language pack.
 - Privacy provider for the download task table, with tests.
+- Stage 1a: `block/download_certificates:downloadcourse` (course context, editing and non-editing
+  teachers), version 2026100501; the namespaced data layer under `classes/local/` (certificate
+  sources for tool_certificate and mod_customcert, scope, filter, repository, ZIP builder,
+  request downloads, task storage) with its tests. Nothing calls it before stage 1b.
 
 ### Changed
 

@@ -47,6 +47,15 @@ $capabilities = [
             'manager' => CAP_ALLOW,
         ],
     ],
+    'block/download_certificates:downloadcourse' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => [
+            'editingteacher' => CAP_ALLOW,
+            'teacher' => CAP_ALLOW,
+        ],
+    ],
     'block/download_certificates:addinstance' => [
         'riskbitmask' => RISK_SPAM | RISK_XSS,
         'captype' => 'write',
