@@ -6,7 +6,8 @@
  *
  * @module     block_download_certificates/certificate_table
  * @package    block_download_certificates
- * @copyright  2025 E-learning Touch'
+ * @copyright  2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 define(['jquery', 'core/form-autocomplete'], function ($, Autocomplete) {

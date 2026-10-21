@@ -18,14 +18,12 @@
  * Scheduled task to clean up expired certificate download tasks.
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace block_download_certificates\task;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Scheduled task that cleans up expired ZIP files and task records.
@@ -36,7 +34,6 @@ defined('MOODLE_INTERNAL') || die();
  * - Stuck processing tasks older than 2 hours
  */
 class cleanup_expired extends \core\task\scheduled_task {
-
     /**
      * Get the task name.
      *

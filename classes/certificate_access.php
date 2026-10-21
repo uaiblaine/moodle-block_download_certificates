@@ -26,27 +26,22 @@
  *     membres de ses groupes dans CE cours (la règle s'applique cours par cours).
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Gestion du périmètre d'accès enseignant (rôles editingteacher / teacher).
  */
 class block_download_certificates_access {
-
     /** @var int[] Cache des IDs de cours enseignés (indexés par userid). */
     private static $teachercoursecache = [];
 
     /** @var array Cache du périmètre visible par cours (indexé par userid). */
     private static $teacherscopecache = [];
 
-    // =========================================================================
     // Détection du rôle enseignant.
-    // =========================================================================
 
     /**
      * Détermine si un utilisateur est enseignant dans au moins un cours.
@@ -96,9 +91,7 @@ class block_download_certificates_access {
         return $courseids;
     }
 
-    // =========================================================================
     // Calcul du périmètre visible (étudiants autorisés par cours).
-    // =========================================================================
 
     /**
      * Retourne le périmètre de visibilité de l'enseignant, cours par cours.
@@ -143,7 +136,7 @@ class block_download_certificates_access {
             if (!empty($teachergroups)) {
                 // L'enseignant est dans des groupes → périmètre restreint aux membres de ses groupes.
                 $groupids = array_keys($teachergroups);
-                list($insql, $inparams) = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'gid');
+                [$insql, $inparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'gid');
                 $inparams['courseid'] = $courseid;
 
                 $members = $DB->get_records_sql(
@@ -194,9 +187,7 @@ class block_download_certificates_access {
         return array_unique($allids);
     }
 
-    // =========================================================================
     // Vérifications de droits pour les actions de téléchargement.
-    // =========================================================================
 
     /**
      * Vérifie que l'enseignant courant peut accéder au certificat d'un étudiant

@@ -24,8 +24,9 @@
  * }
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 define('AJAX_SCRIPT', true);
@@ -72,7 +73,6 @@ try {
         'success' => true,
         'groups'  => $groups,
     ]);
-
 } catch (Exception $e) {
     echo json_encode([
         'success' => false,

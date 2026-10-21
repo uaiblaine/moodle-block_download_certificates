@@ -18,10 +18,10 @@
  * Block download_certificates definition.
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
@@ -35,13 +35,11 @@ require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_
  * This class defines the download certificates block functionality.
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class block_download_certificates extends block_base {
-
     /**
      * Initialize block.
      */
@@ -120,7 +118,6 @@ class block_download_certificates extends block_base {
                 // Interface simplifiée pour les apprenants.
                 $this->content->text = $this->get_learner_content();
             }
-
         } catch (Exception $e) {
             // Error handling.
             $this->content->text = html_writer::div(
@@ -150,27 +147,39 @@ class block_download_certificates extends block_base {
 
             // Stats display.
             $content .= html_writer::start_div('certificate-stats mb-3');
-            $content .= html_writer::tag('h6', get_string('certificate_summary', 'block_download_certificates'),
-                                        ['class' => 'mb-2']);
+            $content .= html_writer::tag(
+                'h6',
+                get_string('certificate_summary', 'block_download_certificates'),
+                ['class' => 'mb-2']
+            );
 
             $content .= html_writer::start_div('row text-center');
 
             $content .= html_writer::start_div('col-4');
             $content .= html_writer::tag('div', $stats['total'], ['class' => 'h5 mb-0 text-primary']);
-            $content .= html_writer::tag('small', get_string('total', 'block_download_certificates'),
-                                        ['class' => 'text-muted']);
+            $content .= html_writer::tag(
+                'small',
+                get_string('total', 'block_download_certificates'),
+                ['class' => 'text-muted']
+            );
             $content .= html_writer::end_div();
 
             $content .= html_writer::start_div('col-4');
             $content .= html_writer::tag('div', $stats['courses'], ['class' => 'h5 mb-0 text-success']);
-            $content .= html_writer::tag('small', get_string('courses', 'block_download_certificates'),
-                                        ['class' => 'text-muted']);
+            $content .= html_writer::tag(
+                'small',
+                get_string('courses', 'block_download_certificates'),
+                ['class' => 'text-muted']
+            );
             $content .= html_writer::end_div();
 
             $content .= html_writer::start_div('col-4');
             $content .= html_writer::tag('div', $stats['recent'], ['class' => 'h5 mb-0 text-info']);
-            $content .= html_writer::tag('small', get_string('recent_7days', 'block_download_certificates'),
-                                        ['class' => 'text-muted']);
+            $content .= html_writer::tag(
+                'small',
+                get_string('recent_7days', 'block_download_certificates'),
+                ['class' => 'text-muted']
+            );
             $content .= html_writer::end_div();
 
             $content .= html_writer::end_div(); // Row.
@@ -189,8 +198,10 @@ class block_download_certificates extends block_base {
 
             // Quick download all button (async).
             if ($stats['total'] > 0) {
-                $downloadurl = new moodle_url('/blocks/download_certificates/download.php',
-                                            ['action' => 'download_all', 'sesskey' => sesskey()]);
+                $downloadurl = new moodle_url(
+                    '/blocks/download_certificates/download.php',
+                    ['action' => 'download_all', 'sesskey' => sesskey()]
+                );
                 $content .= html_writer::link(
                     $downloadurl,
                     get_string('download_all_quick', 'block_download_certificates'),
@@ -202,15 +213,14 @@ class block_download_certificates extends block_base {
                 );
 
                 // Load async download JS module for the block.
-                global $PAGE;
                 $jsconfig = [
                     'sesskey' => sesskey(),
                     'pending_tasks' => $controller->get_pending_tasks(),
                 ];
-                $PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [$jsconfig]);
+                $this->page->requires->js_call_amd('block_download_certificates/async_download', 'init', [$jsconfig]);
 
                 // Required JS strings for the async download module.
-                $PAGE->requires->strings_for_js([
+                $this->page->requires->strings_for_js([
                     'async_generating',
                     'async_preparing',
                     'async_processing',
@@ -234,7 +244,6 @@ class block_download_certificates extends block_base {
             $content .= $this->get_manager_personal_section();
 
             return $content;
-
         } catch (Exception $e) {
             // Error handling.
             return html_writer::div(
@@ -265,14 +274,19 @@ class block_download_certificates extends block_base {
             // Certificate count display.
             $content .= html_writer::start_div('user-certificates mb-3 text-center');
             $content .= html_writer::tag('div', $usercertcount, ['class' => 'h4 mb-1 text-primary']);
-            $content .= html_writer::tag('small', get_string('my_certificates_count', 'block_download_certificates'),
-                                        ['class' => 'text-muted d-block']);
+            $content .= html_writer::tag(
+                'small',
+                get_string('my_certificates_count', 'block_download_certificates'),
+                ['class' => 'text-muted d-block']
+            );
             $content .= html_writer::end_div();
 
             // Download button (only if user has certificates).
             if ($usercertcount > 0) {
-                $downloadurl = new moodle_url('/blocks/download_certificates/download_user.php',
-                                            ['action' => 'download_my_certificates', 'sesskey' => sesskey()]);
+                $downloadurl = new moodle_url(
+                    '/blocks/download_certificates/download_user.php',
+                    ['action' => 'download_my_certificates', 'sesskey' => sesskey()]
+                );
                 $content .= html_writer::link(
                     $downloadurl,
                     get_string('download_my_certificates', 'block_download_certificates'),
@@ -286,7 +300,6 @@ class block_download_certificates extends block_base {
             }
 
             return $content;
-
         } catch (Exception $e) {
             // Error handling.
             return html_writer::div(
@@ -328,8 +341,11 @@ class block_download_certificates extends block_base {
             // Count mod_simplecertificate certificates.
             $simplecertcount = 0;
             if ($dbman->table_exists('simplecertificate_issues')) {
-                $simplecertcount = $DB->count_records_select('simplecertificate_issues',
-                    'userid = ? AND (timedeleted IS NULL OR timedeleted = 0)', [$userid]);
+                $simplecertcount = $DB->count_records_select(
+                    'simplecertificate_issues',
+                    'userid = ? AND (timedeleted IS NULL OR timedeleted = 0)',
+                    [$userid]
+                );
             }
 
             // Count mod_certificatebeautiful certificates.
@@ -383,8 +399,10 @@ class block_download_certificates extends block_base {
             }
 
             if ($dbman->table_exists('simplecertificate_issues')) {
-                $simplecerttotal = $DB->count_records_select('simplecertificate_issues',
-                    'timedeleted IS NULL OR timedeleted = 0');
+                $simplecerttotal = $DB->count_records_select(
+                    'simplecertificate_issues',
+                    'timedeleted IS NULL OR timedeleted = 0'
+                );
             }
 
             if ($dbman->table_exists('certificatebeautiful_issue')) {
@@ -458,17 +476,22 @@ class block_download_certificates extends block_base {
             }
 
             if ($dbman->table_exists('simplecertificate_issues')) {
-                $simplerecent = $DB->count_records_select('simplecertificate_issues',
-                    'timecreated >= ? AND (timedeleted IS NULL OR timedeleted = 0)', [$weekago]);
+                $simplerecent = $DB->count_records_select(
+                    'simplecertificate_issues',
+                    'timecreated >= ? AND (timedeleted IS NULL OR timedeleted = 0)',
+                    [$weekago]
+                );
             }
 
             if ($dbman->table_exists('certificatebeautiful_issue')) {
-                $certificatebeautifulrecent = $DB->count_records_select('certificatebeautiful_issue',
-                                                                        'timecreated >= ?', [$weekago]);
+                $certificatebeautifulrecent = $DB->count_records_select(
+                    'certificatebeautiful_issue',
+                    'timecreated >= ?',
+                    [$weekago]
+                );
             }
 
             $stats['recent'] = $toolrecent + $customrecent + $modrecent + $simplerecent + $certificatebeautifulrecent;
-
         } catch (Exception $e) {
             // If there's an error, return zeros.
             debugging('Error getting certificate stats: ' . $e->getMessage());
@@ -497,20 +520,28 @@ class block_download_certificates extends block_base {
 
             // Personal certificates section.
             $content .= html_writer::start_div('manager-personal-certificates');
-            $content .= html_writer::tag('h6', get_string('my_certificates', 'block_download_certificates'),
-                                        ['class' => 'mb-2 text-secondary']);
+            $content .= html_writer::tag(
+                'h6',
+                get_string('my_certificates', 'block_download_certificates'),
+                ['class' => 'mb-2 text-secondary']
+            );
 
             // Certificate count display.
             $content .= html_writer::start_div('user-certificates mb-2 text-center');
             $content .= html_writer::tag('div', $usercertcount, ['class' => 'h5 mb-1 text-primary']);
-            $content .= html_writer::tag('small', get_string('my_certificates_count', 'block_download_certificates'),
-                                        ['class' => 'text-muted d-block']);
+            $content .= html_writer::tag(
+                'small',
+                get_string('my_certificates_count', 'block_download_certificates'),
+                ['class' => 'text-muted d-block']
+            );
             $content .= html_writer::end_div();
 
             // Download button (only if user has certificates).
             if ($usercertcount > 0) {
-                $downloadurl = new moodle_url('/blocks/download_certificates/download_user.php',
-                                            ['action' => 'download_my_certificates', 'sesskey' => sesskey()]);
+                $downloadurl = new moodle_url(
+                    '/blocks/download_certificates/download_user.php',
+                    ['action' => 'download_my_certificates', 'sesskey' => sesskey()]
+                );
                 $content .= html_writer::link(
                     $downloadurl,
                     get_string('download_my_certificates', 'block_download_certificates'),
@@ -526,14 +557,13 @@ class block_download_certificates extends block_base {
             $content .= html_writer::end_div(); // Manager-personal-certificates.
 
             return $content;
-
         } catch (Exception $e) {
             // Error handling - return empty string on error.
             debugging('Error loading manager personal section: ' . $e->getMessage());
             return '';
         }
     }
-    
+
     /**
      * Détermine si un utilisateur est enseignant dans au moins un cours.
      *
@@ -573,11 +603,12 @@ class block_download_certificates extends block_base {
             // Affichage du nombre de certificats.
             $content .= html_writer::start_div('certificate-stats mb-3 text-center');
             $content .= html_writer::tag('div', $totalcount, ['class' => 'h4 mb-0 text-primary']);
-            $content .= html_writer::tag('small', get_string('teacher_certificates', 'block_download_certificates'),
-                                        ['class' => 'text-muted d-block']);
+            $content .= html_writer::tag(
+                'small',
+                get_string('teacher_certificates', 'block_download_certificates'),
+                ['class' => 'text-muted d-block']
+            );
             $content .= html_writer::end_div();
-
-
 
             // Lien vers la page enseignant.
             $manageurl = new moodle_url('/blocks/download_certificates/index_teacher.php');
@@ -591,7 +622,6 @@ class block_download_certificates extends block_base {
             $content .= $this->get_manager_personal_section();
 
             return $content;
-
         } catch (Exception $e) {
             return html_writer::div(
                 get_string('error_loading_block', 'block_download_certificates'),
@@ -602,7 +632,7 @@ class block_download_certificates extends block_base {
 
     /**
      * Copy any block-specific data when copying to a new block instance.
-     * Since this block does not use instance-specific custom tables, 
+     * Since this block does not use instance-specific custom tables,
      * we simply return true to allow the dashboard duplication to proceed.
      *
      * @param int $fromid original block instance id

@@ -21,18 +21,15 @@
  * batch and individual certificate downloads.
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Handles ZIP packaging, filename generation, and file delivery.
  */
 class block_download_certificates_packager {
-
     /** @var block_download_certificates_retriever File retriever instance. */
     protected $retriever;
 
@@ -53,9 +50,7 @@ class block_download_certificates_packager {
         $this->query = $query;
     }
 
-    // =========================================================================
     // Filename generation methods.
-    // =========================================================================
 
     /**
      * Generate filename for tool_certificate.
@@ -148,9 +143,7 @@ class block_download_certificates_packager {
         return $firstname . '_' . $lastname;
     }
 
-    // =========================================================================
     // File sending methods.
-    // =========================================================================
 
     /**
      * Send PDF file to user for download.
@@ -226,9 +219,7 @@ class block_download_certificates_packager {
         exit;
     }
 
-    // =========================================================================
     // Certificate content retrieval helpers (delegates to retriever).
-    // =========================================================================
 
     /**
      * Get content for a tool_certificate (file storage + HTTP fallback).
@@ -280,9 +271,7 @@ class block_download_certificates_packager {
         return false;
     }
 
-    // =========================================================================
     // Batch ZIP creation — generic method.
-    // =========================================================================
 
     /**
      * Add certificates to a ZIP archive.
@@ -388,7 +377,10 @@ class block_download_certificates_packager {
         foreach ($modcertificates as $cert) {
             try {
                 $filecontent = $this->retriever->get_mod_certificate_content(
-                    $cert->certificateid, $cert->coursename, $cert->certificatename, $cert->userid
+                    $cert->certificateid,
+                    $cert->coursename,
+                    $cert->certificatename,
+                    $cert->userid
                 );
                 if ($filecontent !== false && !empty($filecontent)) {
                     $filename = 'mod_certificate/' . $this->generate_mod_certificate_filename($cert);
@@ -507,7 +499,7 @@ class block_download_certificates_packager {
      * @param array $beautifulcerts certificatebeautiful issues
      * @param string $errorcontext Context label for error log
      * @param string $novalidexception Exception string key when no valid certificates found
-     * @param bool $useTempDir Whether to use make_temp_directory (persistent) instead of make_request_directory
+     * @param bool $usetempdir Whether to use make_temp_directory (persistent) instead of make_request_directory
      */
     protected function create_and_send_zip(
         $zipfilename,
@@ -518,9 +510,9 @@ class block_download_certificates_packager {
         array $beautifulcerts,
         $errorcontext,
         $novalidexception,
-        $useTempDir = false
+        $usetempdir = false
     ) {
-        if ($useTempDir) {
+        if ($usetempdir) {
             $tempdir = make_temp_directory('block_download_certificates');
         } else {
             $tempdir = make_request_directory();
@@ -540,7 +532,13 @@ class block_download_certificates_packager {
 
         $addedfiles = [];
         $result = $this->add_certificates_to_zip(
-            $zip, $toolcerts, $customcerts, $modcerts, $simplecerts, $beautifulcerts, $addedfiles
+            $zip,
+            $toolcerts,
+            $customcerts,
+            $modcerts,
+            $simplecerts,
+            $beautifulcerts,
+            $addedfiles
         );
 
         if (!empty($result['errors'])) {
@@ -601,8 +599,14 @@ class block_download_certificates_packager {
 
         $addedfiles = [];
         $result = $this->add_certificates_to_zip(
-            $zip, $certs['tool'], $certs['custom'], $certs['mod'],
-            $certs['simple'], $certs['beautiful'], $addedfiles, $progresscallback
+            $zip,
+            $certs['tool'],
+            $certs['custom'],
+            $certs['mod'],
+            $certs['simple'],
+            $certs['beautiful'],
+            $addedfiles,
+            $progresscallback
         );
 
         if (!empty($result['errors'])) {
@@ -733,7 +737,10 @@ class block_download_certificates_packager {
                         break;
                     case 'mod':
                         $filecontent = $this->retriever->get_mod_certificate_content(
-                            $cert->certificateid, $cert->coursename, $cert->certificatename, $cert->userid
+                            $cert->certificateid,
+                            $cert->coursename,
+                            $cert->certificatename,
+                            $cert->userid
                         );
                         $filename = 'mod_certificate/' . $this->generate_mod_certificate_filename($cert);
                         break;
@@ -921,7 +928,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = tci.userid
                      LEFT JOIN {course} c ON c.id = tci.courseid
                      LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                     WHERE tci.courseid = ?", [$courseid]
+                     WHERE tci.courseid = ?",
+                    [$courseid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_course: tool_certificate query failed: ' . $e->getMessage());
@@ -940,7 +948,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {customcert} cc ON cc.id = ci.customcertid
                      LEFT JOIN {course} c ON c.id = cc.course
-                     WHERE cc.course = ?", [$courseid]
+                     WHERE cc.course = ?",
+                    [$courseid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_course: customcert query failed: ' . $e->getMessage());
@@ -959,7 +968,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {certificate} cert ON cert.id = ci.certificateid
                      LEFT JOIN {course} c ON c.id = cert.course
-                     WHERE cert.course = ?", [$courseid]
+                     WHERE cert.course = ?",
+                    [$courseid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_course: mod_certificate query failed: ' . $e->getMessage());
@@ -978,7 +988,8 @@ class block_download_certificates_packager {
                      FROM {simplecertificate_issues} si
                      JOIN {user} u ON u.id = si.userid
                      LEFT JOIN {course} c ON c.shortname = si.coursename
-                     WHERE c.id = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$courseid]
+                     WHERE c.id = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)",
+                    [$courseid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_course: simplecertificate query failed: ' . $e->getMessage());
@@ -999,7 +1010,8 @@ class block_download_certificates_packager {
                      LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
                      LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
                      LEFT JOIN {course} c ON c.id = cm.course
-                     WHERE c.id = ?", [$courseid]
+                     WHERE c.id = ?",
+                    [$courseid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_course: certificatebeautiful query failed: ' . $e->getMessage());
@@ -1031,7 +1043,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = tci.userid
                      LEFT JOIN {course} c ON c.id = tci.courseid
                      LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                     WHERE tci.userid = ?", [$userid]
+                     WHERE tci.userid = ?",
+                    [$userid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_user: tool_certificate query failed: ' . $e->getMessage());
@@ -1050,7 +1063,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {customcert} cc ON cc.id = ci.customcertid
                      LEFT JOIN {course} c ON c.id = cc.course
-                     WHERE ci.userid = ?", [$userid]
+                     WHERE ci.userid = ?",
+                    [$userid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_user: customcert query failed: ' . $e->getMessage());
@@ -1069,7 +1083,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {certificate} cert ON cert.id = ci.certificateid
                      LEFT JOIN {course} c ON c.id = cert.course
-                     WHERE ci.userid = ?", [$userid]
+                     WHERE ci.userid = ?",
+                    [$userid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_user: mod_certificate query failed: ' . $e->getMessage());
@@ -1088,7 +1103,8 @@ class block_download_certificates_packager {
                      FROM {simplecertificate_issues} si
                      JOIN {user} u ON u.id = si.userid
                      LEFT JOIN {course} c ON c.shortname = si.coursename
-                     WHERE si.userid = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$userid]
+                     WHERE si.userid = ? AND (si.timedeleted IS NULL OR si.timedeleted = 0)",
+                    [$userid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_user: simplecertificate query failed: ' . $e->getMessage());
@@ -1109,7 +1125,8 @@ class block_download_certificates_packager {
                      LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
                      LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
                      LEFT JOIN {course} c ON c.id = cm.course
-                     WHERE cbi.userid = ?", [$userid]
+                     WHERE cbi.userid = ?",
+                    [$userid]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_user: certificatebeautiful query failed: ' . $e->getMessage());
@@ -1136,7 +1153,7 @@ class block_download_certificates_packager {
             return ['tool' => [], 'custom' => [], 'mod' => [], 'simple' => [], 'beautiful' => []];
         }
         $userids = array_keys($members);
-        list($insql, $inparams) = $DB->get_in_or_equal($userids);
+        [$insql, $inparams] = $DB->get_in_or_equal($userids);
 
         $toolcerts = [];
         if ($dbman->table_exists('tool_certificate_issues')) {
@@ -1149,7 +1166,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = tci.userid
                      LEFT JOIN {course} c ON c.id = tci.courseid
                      LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                     WHERE tci.userid $insql", $inparams
+                     WHERE tci.userid $insql",
+                    $inparams
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_cohort: tool_certificate query failed: ' . $e->getMessage());
@@ -1168,7 +1186,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {customcert} cc ON cc.id = ci.customcertid
                      LEFT JOIN {course} c ON c.id = cc.course
-                     WHERE ci.userid $insql", $inparams
+                     WHERE ci.userid $insql",
+                    $inparams
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_cohort: customcert query failed: ' . $e->getMessage());
@@ -1187,7 +1206,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {certificate} cert ON cert.id = ci.certificateid
                      LEFT JOIN {course} c ON c.id = cert.course
-                     WHERE ci.userid $insql", $inparams
+                     WHERE ci.userid $insql",
+                    $inparams
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_cohort: mod_certificate query failed: ' . $e->getMessage());
@@ -1206,7 +1226,8 @@ class block_download_certificates_packager {
                      FROM {simplecertificate_issues} si
                      JOIN {user} u ON u.id = si.userid
                      LEFT JOIN {course} c ON c.shortname = si.coursename
-                     WHERE si.userid $insql AND (si.timedeleted IS NULL OR si.timedeleted = 0)", $inparams
+                     WHERE si.userid $insql AND (si.timedeleted IS NULL OR si.timedeleted = 0)",
+                    $inparams
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_cohort: simplecertificate query failed: ' . $e->getMessage());
@@ -1227,7 +1248,8 @@ class block_download_certificates_packager {
                      LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
                      LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
                      LEFT JOIN {course} c ON c.id = cm.course
-                     WHERE cbi.userid $insql", $inparams
+                     WHERE cbi.userid $insql",
+                    $inparams
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_cohort: certificatebeautiful query failed: ' . $e->getMessage());
@@ -1260,7 +1282,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = tci.userid
                      LEFT JOIN {course} c ON c.id = tci.courseid
                      LEFT JOIN {tool_certificate_templates} tc ON tc.id = tci.templateid
-                     WHERE tci.timecreated >= ? AND tci.timecreated <= ?", [$startdate, $enddate]
+                     WHERE tci.timecreated >= ? AND tci.timecreated <= ?",
+                    [$startdate, $enddate]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_range: tool_certificate query failed: ' . $e->getMessage());
@@ -1279,7 +1302,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {customcert} cc ON cc.id = ci.customcertid
                      LEFT JOIN {course} c ON c.id = cc.course
-                     WHERE ci.timecreated >= ? AND ci.timecreated <= ?", [$startdate, $enddate]
+                     WHERE ci.timecreated >= ? AND ci.timecreated <= ?",
+                    [$startdate, $enddate]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_range: customcert query failed: ' . $e->getMessage());
@@ -1298,7 +1322,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = ci.userid
                      JOIN {certificate} cert ON cert.id = ci.certificateid
                      LEFT JOIN {course} c ON c.id = cert.course
-                     WHERE ci.timecreated >= ? AND ci.timecreated <= ?", [$startdate, $enddate]
+                     WHERE ci.timecreated >= ? AND ci.timecreated <= ?",
+                    [$startdate, $enddate]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_range: mod_certificate query failed: ' . $e->getMessage());
@@ -1318,7 +1343,8 @@ class block_download_certificates_packager {
                      JOIN {user} u ON u.id = si.userid
                      LEFT JOIN {course} c ON c.shortname = si.coursename
                      WHERE si.timecreated >= ? AND si.timecreated <= ?
-                     AND (si.timedeleted IS NULL OR si.timedeleted = 0)", [$startdate, $enddate]
+                     AND (si.timedeleted IS NULL OR si.timedeleted = 0)",
+                    [$startdate, $enddate]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_range: simplecertificate query failed: ' . $e->getMessage());
@@ -1339,7 +1365,8 @@ class block_download_certificates_packager {
                      LEFT JOIN {certificatebeautiful} cb ON cb.id = cbi.certificatebeautifulid
                      LEFT JOIN {course_modules} cm ON cm.id = cbi.cmid
                      LEFT JOIN {course} c ON c.id = cm.course
-                     WHERE cbi.timecreated >= ? AND cbi.timecreated <= ?", [$startdate, $enddate]
+                     WHERE cbi.timecreated >= ? AND cbi.timecreated <= ?",
+                    [$startdate, $enddate]
                 );
             } catch (Exception $e) {
                 debugging('fetch_certificates_for_range: certificatebeautiful query failed: ' . $e->getMessage());
@@ -1350,9 +1377,7 @@ class block_download_certificates_packager {
                 'simple' => $simplecerts, 'beautiful' => $beautifulcerts];
     }
 
-    // =========================================================================
     // Helper de vérification d'accès.
-    // =========================================================================
 
     /**
      * Vérifie que l'utilisateur courant est gestionnaire (block/download_certificates:manage)
@@ -1380,9 +1405,7 @@ class block_download_certificates_packager {
         require_capability('block/download_certificates:manage', $context);
     }
 
-    // =========================================================================
     // Public batch download methods.
-    // =========================================================================
 
 
     /**
@@ -1398,15 +1421,23 @@ class block_download_certificates_packager {
         $simplecerts = $this->query->get_simplecertificate_issues();
         $beautifulcerts = $this->query->get_certificatebeautiful_issues();
 
-        if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
-            empty($simplecerts) && empty($beautifulcerts)) {
+        if (
+            empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
+            empty($simplecerts) && empty($beautifulcerts)
+        ) {
             throw new moodle_exception('nocertificates', 'block_download_certificates');
         }
 
         $zipfilename = 'all_certificates_' . date('Y-m-d_H-i-s') . '.zip';
         $this->create_and_send_zip(
-            $zipfilename, $toolcerts, $customcerts, $modcerts, $simplecerts, $beautifulcerts,
-            'all certificates', 'novalidcertificates'
+            $zipfilename,
+            $toolcerts,
+            $customcerts,
+            $modcerts,
+            $simplecerts,
+            $beautifulcerts,
+            'all certificates',
+            'novalidcertificates'
         );
     }
 
@@ -1531,8 +1562,10 @@ class block_download_certificates_packager {
             }
         }
 
-        if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
-            empty($simplecerts) && empty($beautifulcerts)) {
+        if (
+            empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
+            empty($simplecerts) && empty($beautifulcerts)
+        ) {
             throw new moodle_exception('nocertificatesinrange', 'block_download_certificates');
         }
 
@@ -1541,8 +1574,14 @@ class block_download_certificates_packager {
         $zipfilename = "certificates_{$startdatestr}_to_{$enddatestr}.zip";
 
         $this->create_and_send_zip(
-            $zipfilename, $toolcerts, $customcerts, $modcerts, $simplecerts, $beautifulcerts,
-            "date range {$startdatestr} to {$enddatestr}", 'novalidcertificatesinrange'
+            $zipfilename,
+            $toolcerts,
+            $customcerts,
+            $modcerts,
+            $simplecerts,
+            $beautifulcerts,
+            "date range {$startdatestr} to {$enddatestr}",
+            'novalidcertificatesinrange'
         );
     }
 
@@ -1666,8 +1705,10 @@ class block_download_certificates_packager {
             }
         }
 
-        if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
-            empty($simplecerts) && empty($beautifulcerts)) {
+        if (
+            empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
+            empty($simplecerts) && empty($beautifulcerts)
+        ) {
             throw new moodle_exception('nocertificatesforcourse', 'block_download_certificates');
         }
 
@@ -1675,8 +1716,15 @@ class block_download_certificates_packager {
         $zipfilename = "Certificats_{$cleancoursename}.zip";
 
         $this->create_and_send_zip(
-            $zipfilename, $toolcerts, $customcerts, $modcerts, $simplecerts, $beautifulcerts,
-            "course '{$course->fullname}'", 'novalidcertificatesforcourse', true
+            $zipfilename,
+            $toolcerts,
+            $customcerts,
+            $modcerts,
+            $simplecerts,
+            $beautifulcerts,
+            "course '{$course->fullname}'",
+            'novalidcertificatesforcourse',
+            true
         );
     }
 
@@ -1797,19 +1845,30 @@ class block_download_certificates_packager {
             }
         }
 
-        if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
-            empty($simplecerts) && empty($beautifulcerts)) {
+        if (
+            empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
+            empty($simplecerts) && empty($beautifulcerts)
+        ) {
             throw new moodle_exception('nocertificatesuser', 'block_download_certificates');
         }
 
-        $user = $DB->get_record('user', ['id' => $userid],
-            'firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename');
+        $user = $DB->get_record(
+            'user',
+            ['id' => $userid],
+            'firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename'
+        );
         $username = fullname($user);
         $zipfilename = 'certificates_' . clean_filename($username) . '.zip';
 
         $this->create_and_send_zip(
-            $zipfilename, $toolcerts, $customcerts, $modcerts, $simplecerts, $beautifulcerts,
-            "user '{$username}'", 'novalidcertificatesuser'
+            $zipfilename,
+            $toolcerts,
+            $customcerts,
+            $modcerts,
+            $simplecerts,
+            $beautifulcerts,
+            "user '{$username}'",
+            'novalidcertificatesuser'
         );
     }
 
@@ -1836,7 +1895,7 @@ class block_download_certificates_packager {
         }
 
         $userids = array_keys($cohortmembers);
-        list($insql, $params) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
 
         $dbman = $DB->get_manager();
 
@@ -1942,22 +2001,29 @@ class block_download_certificates_packager {
             }
         }
 
-        if (empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
-            empty($simplecerts) && empty($beautifulcerts)) {
+        if (
+            empty($toolcerts) && empty($customcerts) && empty($modcerts) &&
+            empty($simplecerts) && empty($beautifulcerts)
+        ) {
             throw new moodle_exception('nocertificatescohort', 'block_download_certificates');
         }
 
         $zipfilename = 'cohort_' . clean_filename($cohort->name) . '_certificates_' . date('Y-m-d_H-i-s') . '.zip';
 
         $this->create_and_send_zip(
-            $zipfilename, $toolcerts, $customcerts, $modcerts, $simplecerts, $beautifulcerts,
-            "cohort '{$cohort->name}'", 'novalidcertificatescohort', true
+            $zipfilename,
+            $toolcerts,
+            $customcerts,
+            $modcerts,
+            $simplecerts,
+            $beautifulcerts,
+            "cohort '{$cohort->name}'",
+            'novalidcertificatescohort',
+            true
         );
     }
 
-    // =========================================================================
     // Individual download methods.
-    // =========================================================================
 
     /**
      * Download a single tool_certificate file.
@@ -2019,9 +2085,12 @@ class block_download_certificates_packager {
 
         $this->require_manager_or_teacher();
 
-        $issue = $DB->get_record('customcert_issues',
+        $issue = $DB->get_record(
+            'customcert_issues',
             ['userid' => $userid, 'customcertid' => $certificateid],
-            '*', IGNORE_MISSING);
+            '*',
+            IGNORE_MISSING
+        );
 
         if (!$issue) {
             throw new moodle_exception('certificatenotfound', 'block_download_certificates');
@@ -2057,7 +2126,6 @@ class block_download_certificates_packager {
 
             $filename = $this->generate_customcert_filename($certificate);
             $this->send_pdf_download($filecontent, $filename);
-
         } catch (Exception $e) {
             debugging('Error generating customcert PDF: ' . $e->getMessage());
             throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates');
@@ -2075,9 +2143,12 @@ class block_download_certificates_packager {
 
         $this->require_manager_or_teacher();
 
-        $issue = $DB->get_record('certificate_issues',
+        $issue = $DB->get_record(
+            'certificate_issues',
             ['userid' => $userid, 'certificateid' => $certificateid],
-            '*', IGNORE_MISSING);
+            '*',
+            IGNORE_MISSING
+        );
 
         if (!$issue) {
             throw new moodle_exception('certificatenotfound', 'block_download_certificates');
@@ -2098,16 +2169,22 @@ class block_download_certificates_packager {
 
         try {
             $fileurl = $this->retriever->get_mod_certificate_download_url(
-                $certificateid, $certificate->coursename, $certificate->certificatename, $userid
+                $certificateid,
+                $certificate->coursename,
+                $certificate->certificatename,
+                $userid
             );
 
             if (empty($fileurl)) {
-                throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates',
-                    '', 'Unable to generate download URL for mod_certificate.');
+                throw new moodle_exception(
+                    'cannotdownloadcertificate',
+                    'block_download_certificates',
+                    '',
+                    'Unable to generate download URL for mod_certificate.'
+                );
             }
 
             redirect($fileurl);
-
         } catch (Exception $e) {
             debugging('Error accessing mod_certificate: ' . $e->getMessage());
             throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates');
@@ -2126,9 +2203,12 @@ class block_download_certificates_packager {
 
         $this->require_manager_or_teacher();
 
-        $issue = $DB->get_record('simplecertificate_issues',
+        $issue = $DB->get_record(
+            'simplecertificate_issues',
             ['userid' => $userid, 'certificateid' => $certificateid, 'code' => $code],
-            '*', IGNORE_MISSING);
+            '*',
+            IGNORE_MISSING
+        );
 
         if (!$issue) {
             throw new moodle_exception('certificatenotfound', 'block_download_certificates');
@@ -2142,12 +2222,15 @@ class block_download_certificates_packager {
             $fileurl = $this->retriever->get_simplecertificate_download_url($code);
 
             if (empty($fileurl)) {
-                throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates',
-                    '', 'Unable to generate download URL for mod_simplecertificate.');
+                throw new moodle_exception(
+                    'cannotdownloadcertificate',
+                    'block_download_certificates',
+                    '',
+                    'Unable to generate download URL for mod_simplecertificate.'
+                );
             }
 
             redirect($fileurl);
-
         } catch (Exception $e) {
             debugging('Error accessing mod_simplecertificate: ' . $e->getMessage());
             throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates');
@@ -2167,9 +2250,12 @@ class block_download_certificates_packager {
         $context = context_system::instance();
         require_capability('block/download_certificates:manage', $context);
 
-        $issue = $DB->get_record('certificatebeautiful_issue',
+        $issue = $DB->get_record(
+            'certificatebeautiful_issue',
             ['userid' => $userid, 'certificatebeautifulid' => $certificateid, 'code' => $code],
-            '*', IGNORE_MISSING);
+            '*',
+            IGNORE_MISSING
+        );
 
         if (!$issue) {
             throw new moodle_exception('certificatenotfound', 'block_download_certificates');
@@ -2179,21 +2265,22 @@ class block_download_certificates_packager {
             $fileurl = $this->retriever->get_certificatebeautiful_individual_download_url($code);
 
             if (empty($fileurl)) {
-                throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates',
-                    '', 'Unable to generate download URL for mod_certificatebeautiful.');
+                throw new moodle_exception(
+                    'cannotdownloadcertificate',
+                    'block_download_certificates',
+                    '',
+                    'Unable to generate download URL for mod_certificatebeautiful.'
+                );
             }
 
             redirect($fileurl);
-
         } catch (Exception $e) {
             debugging('Error accessing mod_certificatebeautiful: ' . $e->getMessage());
             throw new moodle_exception('cannotdownloadcertificate', 'block_download_certificates');
         }
     }
 
-    // =========================================================================
     // Méthodes filtrées pour les enseignants.
-    // =========================================================================
 
     /**
      * Récupère les certificats d'un cours filtrés sur une liste d'utilisateurs autorisés.
@@ -2215,7 +2302,7 @@ class block_download_certificates_packager {
         }
 
         $dbman = $DB->get_manager();
-        list($userinsql, $userinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'uid');
+        [$userinsql, $userinparams] = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'uid');
 
         $toolcerts = [];
         if ($dbman->table_exists('tool_certificate_issues')) {
@@ -2239,7 +2326,7 @@ class block_download_certificates_packager {
         $customcerts = [];
         if ($dbman->table_exists('customcert_issues')) {
             try {
-                list($ccuserinsql, $ccuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'ccuid');
+                [$ccuserinsql, $ccuserinparams] = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'ccuid');
                 $customcerts = $DB->get_records_sql(
                     "SELECT ci.id, ci.userid, ci.customcertid, ci.code, ci.emailed, ci.timecreated,
                             u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
@@ -2260,7 +2347,7 @@ class block_download_certificates_packager {
         $modcerts = [];
         if ($dbman->table_exists('certificate_issues')) {
             try {
-                list($mcuserinsql, $mcuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'mcuid');
+                [$mcuserinsql, $mcuserinparams] = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'mcuid');
                 $modcerts = $DB->get_records_sql(
                     "SELECT ci.id, ci.userid, ci.certificateid, ci.code, ci.timecreated,
                             u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
@@ -2281,7 +2368,7 @@ class block_download_certificates_packager {
         $simplecerts = [];
         if ($dbman->table_exists('simplecertificate_issues')) {
             try {
-                list($scuserinsql, $scuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'scuid');
+                [$scuserinsql, $scuserinparams] = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'scuid');
                 $simplecerts = $DB->get_records_sql(
                     "SELECT si.id, si.certificateid, si.userid, si.certificatename, si.code,
                             si.timecreated, si.pathnamehash, si.coursename,
@@ -2303,7 +2390,7 @@ class block_download_certificates_packager {
         $beautifulcerts = [];
         if ($dbman->table_exists('certificatebeautiful_issue')) {
             try {
-                list($cbuserinsql, $cbuserinparams) = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'cbuid');
+                [$cbuserinsql, $cbuserinparams] = $DB->get_in_or_equal($visibleuserids, SQL_PARAMS_NAMED, 'cbuid');
                 $beautifulcerts = $DB->get_records_sql(
                     "SELECT cbi.id, cbi.userid, cbi.cmid, cbi.certificatebeautifulid, cbi.code,
                             cbi.version, cbi.timecreated,
@@ -2340,8 +2427,11 @@ class block_download_certificates_packager {
      * @param int|null $groupid    ID de groupe spécifique, ou null pour tous les groupes du périmètre
      * @throws moodle_exception Si le cours n'est pas dans le périmètre ou aucun certificat
      */
-    public function download_certificates_by_course_for_teacher(int $courseid, int $teacherid,
-                                                                 ?int $groupid = null): void {
+    public function download_certificates_by_course_for_teacher(
+        int $courseid,
+        int $teacherid,
+        ?int $groupid = null
+    ): void {
         global $DB;
 
         // Vérification : le cours doit être dans le périmètre de l'enseignant.
@@ -2384,8 +2474,10 @@ class block_download_certificates_packager {
         // Fetch des certificats filtrés.
         $certs = $this->fetch_certificates_for_course_teacher($courseid, $visibleuserids);
 
-        if (empty($certs['tool']) && empty($certs['custom']) && empty($certs['mod']) &&
-            empty($certs['simple']) && empty($certs['beautiful'])) {
+        if (
+            empty($certs['tool']) && empty($certs['custom']) && empty($certs['mod']) &&
+            empty($certs['simple']) && empty($certs['beautiful'])
+        ) {
             throw new moodle_exception('nocertificatesforcourse', 'block_download_certificates');
         }
 
@@ -2398,10 +2490,15 @@ class block_download_certificates_packager {
         }
 
         $this->create_and_send_zip(
-            $zipfilename, $certs['tool'], $certs['custom'], $certs['mod'],
-            $certs['simple'], $certs['beautiful'],
-            "teacher course '{$course->fullname}'", 'novalidcertificatesforcourse', true
+            $zipfilename,
+            $certs['tool'],
+            $certs['custom'],
+            $certs['mod'],
+            $certs['simple'],
+            $certs['beautiful'],
+            "teacher course '{$course->fullname}'",
+            'novalidcertificatesforcourse',
+            true
         );
     }
 }
-

@@ -18,14 +18,13 @@
  * Download course certificates for block_download_certificates plugin.
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/lib.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_retriever.php');
@@ -61,10 +60,12 @@ if (empty($courseid)) {
     $returnurl = $ismanager
         ? new moodle_url('/blocks/download_certificates/index.php')
         : new moodle_url('/blocks/download_certificates/index_teacher.php');
-    redirect($returnurl,
-             get_string('coursenotselected', 'block_download_certificates'),
-             null,
-             \core\output\notification::NOTIFY_ERROR);
+    redirect(
+        $returnurl,
+        get_string('coursenotselected', 'block_download_certificates'),
+        null,
+        \core\output\notification::NOTIFY_ERROR
+    );
 }
 
 // Délégation selon le niveau d'accès.
@@ -74,10 +75,12 @@ if ($ismanager) {
     try {
         $controller->download_certificates_by_course($courseid);
     } catch (Exception $e) {
-        redirect(new moodle_url('/blocks/download_certificates/index.php'),
-                 $e->getMessage(),
-                 null,
-                 \core\output\notification::NOTIFY_ERROR);
+        redirect(
+            new moodle_url('/blocks/download_certificates/index.php'),
+            $e->getMessage(),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
     }
 } else {
     // Mode enseignant : téléchargement filtré sur le périmètre (+ groupe optionnel).
@@ -87,9 +90,11 @@ if ($ismanager) {
     try {
         $packager->download_certificates_by_course_for_teacher($courseid, $USER->id, $groupid ?: null);
     } catch (Exception $e) {
-        redirect(new moodle_url('/blocks/download_certificates/index_teacher.php'),
-                 $e->getMessage(),
-                 null,
-                 \core\output\notification::NOTIFY_ERROR);
+        redirect(
+            new moodle_url('/blocks/download_certificates/index_teacher.php'),
+            $e->getMessage(),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
     }
 }

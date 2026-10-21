@@ -18,10 +18,10 @@
  * Download certificates by date range for block_download_certificates plugin.
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once(__DIR__ . '/../../config.php');
@@ -63,9 +63,7 @@ try {
 
     // Download certificates in date range.
     $controller->download_certificates_by_date_range($starttime, $endtime);
-
 } catch (Exception $e) {
-
     // Show error page.
     $PAGE->set_context($context);
     $PAGE->set_url('/blocks/download_certificates/download_range.php');

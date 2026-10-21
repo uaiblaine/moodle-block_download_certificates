@@ -18,10 +18,10 @@
  * Download specific certificate.
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once('../../config.php');
@@ -66,14 +66,14 @@ try {
                 "SELECT cc.course FROM {customcert_issues} ci
                   JOIN {customcert} cc ON cc.id = ci.customcertid
                   WHERE ci.userid = :uid AND ci.customcertid = :cid",
-                ['uid' => $userid, 'cid' => $certificateid], IGNORE_MISSING
+                ['uid' => $userid, 'cid' => $certificateid],
+                IGNORE_MISSING
             );
             $courseid = $issue ? (int) $issue->course : 0;
             $access->require_teacher_access_to_certificate($userid, $courseid);
         }
 
         $controller->download_single_customcert($userid, $certificateid);
-
     } else if ($type === 'mod_certificate') {
         // For mod_certificate, use the new method.
         $userid        = required_param('userid', PARAM_INT);
@@ -86,14 +86,14 @@ try {
                 "SELECT cert.course FROM {certificate_issues} ci
                   JOIN {certificate} cert ON cert.id = ci.certificateid
                   WHERE ci.userid = :uid AND ci.certificateid = :cid",
-                ['uid' => $userid, 'cid' => $certificateid], IGNORE_MISSING
+                ['uid' => $userid, 'cid' => $certificateid],
+                IGNORE_MISSING
             );
             $courseid = $issue ? (int) $issue->course : 0;
             $access->require_teacher_access_to_certificate($userid, $courseid);
         }
 
         $controller->download_single_mod_certificate($userid, $certificateid);
-
     } else if ($type === 'mod_simplecertificate') {
         // For mod_simplecertificate, use the API method.
         $userid        = required_param('userid', PARAM_INT);
@@ -109,7 +109,6 @@ try {
         }
 
         $controller->download_single_simplecertificate($userid, $certificateid, $code);
-
     } else if ($type === 'mod_certificatebeautiful') {
         // For mod_certificatebeautiful, use the API method.
         $userid = required_param('userid', PARAM_INT);
@@ -125,7 +124,6 @@ try {
         }
 
         $controller->download_single_certificatebeautiful($userid, $certificateid, $code);
-
     } else {
         // For tool_certificate, use the existing method.
         $timecreated = required_param('timecreated', PARAM_INT);
@@ -136,8 +134,12 @@ try {
             global $DB;
             $dbman = $DB->get_manager();
             if ($dbman->table_exists('tool_certificate_issues')) {
-                $issue = $DB->get_record('tool_certificate_issues',
-                    ['timecreated' => $timecreated, 'code' => $code], 'userid,courseid', IGNORE_MISSING);
+                $issue = $DB->get_record(
+                    'tool_certificate_issues',
+                    ['timecreated' => $timecreated, 'code' => $code],
+                    'userid,courseid',
+                    IGNORE_MISSING
+                );
                 if (!$issue) {
                     throw new moodle_exception('certificatenotfound', 'block_download_certificates');
                 }
@@ -147,8 +149,6 @@ try {
 
         $controller->download_single_certificate($timecreated, $code);
     }
-
-
 } catch (Exception $e) {
     debugging('Certificate download error: ' . $e->getMessage());
 
@@ -156,6 +156,10 @@ try {
     $returnurl = $isteacher
         ? new moodle_url('/blocks/download_certificates/index_teacher.php')
         : new moodle_url('/blocks/download_certificates/index.php');
-    redirect($returnurl, get_string('cannotdownloadcertificate', 'block_download_certificates'), null,
-                                    \core\output\notification::NOTIFY_ERROR);
+    redirect(
+        $returnurl,
+        get_string('cannotdownloadcertificate', 'block_download_certificates'),
+        null,
+        \core\output\notification::NOTIFY_ERROR
+    );
 }

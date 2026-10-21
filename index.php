@@ -18,14 +18,13 @@
  * Main controller for block_download_certificates plugin.
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/lib.php');
 require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
 
 require_login();

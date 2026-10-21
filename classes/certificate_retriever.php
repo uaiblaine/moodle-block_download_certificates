@@ -21,9 +21,9 @@
  * direct file storage access over HTTP download for performance.
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
@@ -39,10 +39,7 @@ require_once($CFG->libdir . '/filelib.php');
  * 3. HTTP download as last resort (~200-500ms)
  */
 class block_download_certificates_retriever {
-
-    // =========================================================================
     // URL Generation methods.
-    // =========================================================================
 
     /**
      * Generate download URL for a tool_certificate certificate.
@@ -118,7 +115,8 @@ class block_download_certificates_retriever {
 
         $issueitemid = $certificateid;
         if ($userid) {
-            $issue = $DB->get_record('certificate_issues',
+            $issue = $DB->get_record(
+                'certificate_issues',
                 ['userid' => $userid, 'certificateid' => $certificateid],
                 'id'
             );
@@ -134,9 +132,7 @@ class block_download_certificates_retriever {
                 $issueitemid . '/' . rawurlencode($filename);
     }
 
-    // =========================================================================
     // File content retrieval methods (direct file storage - fast).
-    // =========================================================================
 
     /**
      * Get tool_certificate file content from Moodle file storage.
@@ -167,11 +163,19 @@ class block_download_certificates_retriever {
             }
 
             // Method 3: Search in area files with timecreated.
-            $files = $fs->get_area_files($context->id, 'tool_certificate', 'issues', $timecreated,
-                'timemodified DESC', false);
+            $files = $fs->get_area_files(
+                $context->id,
+                'tool_certificate',
+                'issues',
+                $timecreated,
+                'timemodified DESC',
+                false
+            );
             foreach ($files as $file) {
-                if ($file->get_filename() === $filename ||
-                    strpos($file->get_filename(), $code) !== false) {
+                if (
+                    $file->get_filename() === $filename ||
+                    strpos($file->get_filename(), $code) !== false
+                ) {
                     return $file->get_content();
                 }
             }
@@ -179,8 +183,10 @@ class block_download_certificates_retriever {
             // Method 4: Search in area files with itemid 0.
             $files = $fs->get_area_files($context->id, 'tool_certificate', 'issues', 0, 'timemodified DESC', false);
             foreach ($files as $file) {
-                if ($file->get_filename() === $filename ||
-                    strpos($file->get_filename(), $code) !== false) {
+                if (
+                    $file->get_filename() === $filename ||
+                    strpos($file->get_filename(), $code) !== false
+                ) {
                     return $file->get_content();
                 }
             }
@@ -199,7 +205,6 @@ class block_download_certificates_retriever {
             }
 
             return false;
-
         } catch (Exception $e) {
             debugging('Error getting certificate file: ' . $e->getMessage());
             return false;
@@ -237,8 +242,11 @@ class block_download_certificates_retriever {
 
             $issueitemid = $certificateid;
             if ($userid) {
-                $issue = $DB->get_record('certificate_issues',
-                    ['userid' => $userid, 'certificateid' => $certificateid], 'id');
+                $issue = $DB->get_record(
+                    'certificate_issues',
+                    ['userid' => $userid, 'certificateid' => $certificateid],
+                    'id'
+                );
                 if ($issue) {
                     $issueitemid = $issue->id;
                 }
@@ -272,8 +280,14 @@ class block_download_certificates_retriever {
             }
 
             // Search all files in area with issue itemid.
-            $files = $fs->get_area_files($modulecontext->id, 'mod_certificate', 'issue', $issueitemid,
-                'timemodified DESC', false);
+            $files = $fs->get_area_files(
+                $modulecontext->id,
+                'mod_certificate',
+                'issue',
+                $issueitemid,
+                'timemodified DESC',
+                false
+            );
             foreach ($files as $file) {
                 if (strpos($file->get_filename(), '.pdf') !== false) {
                     return $file->get_content();
@@ -282,8 +296,14 @@ class block_download_certificates_retriever {
 
             // Fallback: try with certificate ID as itemid.
             if ($issueitemid !== $certificateid) {
-                $files = $fs->get_area_files($modulecontext->id, 'mod_certificate', 'issue', $certificateid,
-                    'timemodified DESC', false);
+                $files = $fs->get_area_files(
+                    $modulecontext->id,
+                    'mod_certificate',
+                    'issue',
+                    $certificateid,
+                    'timemodified DESC',
+                    false
+                );
                 foreach ($files as $file) {
                     if (strpos($file->get_filename(), '.pdf') !== false) {
                         return $file->get_content();
@@ -292,7 +312,6 @@ class block_download_certificates_retriever {
             }
 
             return false;
-
         } catch (Exception $e) {
             debugging('Error getting mod_certificate file: ' . $e->getMessage());
             return false;
@@ -321,7 +340,6 @@ class block_download_certificates_retriever {
 
             // If direct file access fails, return false to fall back to URL method.
             return false;
-
         } catch (Exception $e) {
             debugging('Error getting simplecertificate file: ' . $e->getMessage());
             return false;
@@ -369,20 +387,38 @@ class block_download_certificates_retriever {
 
                     foreach ($fileareas as $filearea) {
                         foreach ($filenames as $filename) {
-                            $file = $fs->get_file($context->id, 'mod_certificatebeautiful', $filearea,
-                                $issue->id, '/', $filename);
+                            $file = $fs->get_file(
+                                $context->id,
+                                'mod_certificatebeautiful',
+                                $filearea,
+                                $issue->id,
+                                '/',
+                                $filename
+                            );
                             if ($file && !$file->is_directory()) {
                                 return $file->get_content();
                             }
 
-                            $file = $fs->get_file($context->id, 'mod_certificatebeautiful', $filearea,
-                                0, '/', $filename);
+                            $file = $fs->get_file(
+                                $context->id,
+                                'mod_certificatebeautiful',
+                                $filearea,
+                                0,
+                                '/',
+                                $filename
+                            );
                             if ($file && !$file->is_directory()) {
                                 return $file->get_content();
                             }
 
-                            $file = $fs->get_file($context->id, 'mod_certificatebeautiful', $filearea,
-                                $issue->userid, '/', $filename);
+                            $file = $fs->get_file(
+                                $context->id,
+                                'mod_certificatebeautiful',
+                                $filearea,
+                                $issue->userid,
+                                '/',
+                                $filename
+                            );
                             if ($file && !$file->is_directory()) {
                                 return $file->get_content();
                             }
@@ -397,37 +433,28 @@ class block_download_certificates_retriever {
                 $fileareas = ['certificates', 'certificate', 'issued'];
 
                 foreach ($fileareas as $filearea) {
-                    $file = $fs->get_file($coursecontext->id, 'mod_certificatebeautiful', $filearea,
-                        $issue->id, '/', $code . '.pdf');
+                    $file = $fs->get_file(
+                        $coursecontext->id,
+                        'mod_certificatebeautiful',
+                        $filearea,
+                        $issue->id,
+                        '/',
+                        $code . '.pdf'
+                    );
                     if ($file && !$file->is_directory()) {
                         return $file->get_content();
                     }
                 }
             }
 
-            // Method 4: Search all files with matching names.
-            $files = $fs->get_area_files_select(
-                0, 'mod_certificatebeautiful', false, 'filename', false,
-                "filename LIKE '%{$code}%' OR filename LIKE '%{$issue->id}%'"
-            );
-
-            foreach ($files as $file) {
-                if (!$file->is_directory() && strpos($file->get_filename(), '.pdf') !== false) {
-                    return $file->get_content();
-                }
-            }
-
             return false;
-
         } catch (Exception $e) {
             debugging('Error getting certificatebeautiful file: ' . $e->getMessage());
             return false;
         }
     }
 
-    // =========================================================================
     // Combined retrieval methods (file storage + HTTP fallback).
-    // =========================================================================
 
     /**
      * Get mod_certificate content: try file storage first, then HTTP.
@@ -456,7 +483,6 @@ class block_download_certificates_retriever {
             }
 
             return false;
-
         } catch (Exception $e) {
             debugging('Error getting mod_certificate content: ' . $e->getMessage());
             return false;
@@ -487,7 +513,6 @@ class block_download_certificates_retriever {
             }
 
             return false;
-
         } catch (Exception $e) {
             debugging('Error getting simplecertificate content: ' . $e->getMessage());
             return false;
@@ -518,16 +543,13 @@ class block_download_certificates_retriever {
             }
 
             return false;
-
         } catch (Exception $e) {
             debugging('Error getting certificatebeautiful content: ' . $e->getMessage());
             return false;
         }
     }
 
-    // =========================================================================
     // HTTP download methods (fallback - slower).
-    // =========================================================================
 
     /**
      * Download file via HTTP request.
@@ -601,7 +623,6 @@ class block_download_certificates_retriever {
             }
 
             return $content;
-
         } catch (Exception $e) {
             debugging('HTTP download error: ' . $e->getMessage());
             return false;

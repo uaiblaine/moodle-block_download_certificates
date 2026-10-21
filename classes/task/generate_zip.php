@@ -22,9 +22,9 @@
  * This prevents memory exhaustion and timeout issues on large volumes.
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace block_download_certificates\task;
@@ -42,7 +42,6 @@ require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_
  * for subsequent batches until all certificates have been processed.
  */
 class generate_zip extends \core\task\adhoc_task {
-
     /** @var int Number of certificates to process per batch. */
     const BATCH_SIZE = 500;
 
@@ -178,8 +177,10 @@ class generate_zip extends \core\task\adhoc_task {
                     if (!empty($allerrors)) {
                         $zip = new \ZipArchive();
                         if ($zip->open($result['zippath']) === true) {
-                            $zip->addFromString('download_errors.txt',
-                                "Download errors:\n" . implode("\n", $allerrors));
+                            $zip->addFromString(
+                                'download_errors.txt',
+                                "Download errors:\n" . implode("\n", $allerrors)
+                            );
                             $zip->close();
                         }
                     }
@@ -197,7 +198,6 @@ class generate_zip extends \core\task\adhoc_task {
 
                 mtrace("Task {$taskid}: ZIP generated successfully at {$result['zippath']}");
             }
-
         } catch (\Exception $e) {
             // Mark task as failed.
             $DB->update_record('block_download_certificates_tasks', (object) [

@@ -23,9 +23,9 @@
  *    son périmètre (cours enseignés + étudiants visibles selon les groupes).
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 define('AJAX_SCRIPT', true);
@@ -67,12 +67,11 @@ try {
     $query = new block_download_certificates_query();
 
     if ($ismanager) {
-        // ---- Mode gestionnaire : accès complet ----
+        // Manager: every certificate.
         $total   = $query->count_search_results($search);
         $records = $query->search_all_certificates($search, $offset, $perpage, $sort, $order);
-
     } else {
-        // ---- Mode enseignant : accès filtré ----
+        // Teacher: the certificates of the teacher's scope.
         $scope = $access->get_teacher_visible_user_ids($USER->id);
 
         if (empty($scope)) {
@@ -135,12 +134,9 @@ try {
         'perpage' => $perpage,
         'pages'   => ceil($total / $perpage),
     ]);
-
 } catch (Exception $e) {
     echo json_encode([
         'success' => false,
         'error'   => $e->getMessage(),
     ]);
 }
-
-

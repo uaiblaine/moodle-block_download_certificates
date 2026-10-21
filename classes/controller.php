@@ -23,10 +23,10 @@
  * - certificate_packager: ZIP creation, filename generation, file sending
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
@@ -44,7 +44,6 @@ require_once(__DIR__ . '/certificate_packager.php');
  * Delegates all heavy work to retriever, query, and packager classes.
  */
 class block_download_certificates_controller {
-
     /** @var block_download_certificates_retriever */
     protected $retriever;
 
@@ -63,9 +62,7 @@ class block_download_certificates_controller {
         $this->packager = new block_download_certificates_packager($this->retriever, $this->query);
     }
 
-    // =========================================================================
     // Data retrieval for display (index page, block, AJAX).
-    // =========================================================================
 
     /**
      * Get certificates data for display.
@@ -100,9 +97,7 @@ class block_download_certificates_controller {
         ];
     }
 
-    // =========================================================================
     // Aggregation queries (delegated to query class).
-    // =========================================================================
 
     /**
      * Get list of courses that have certificates.
@@ -140,9 +135,7 @@ class block_download_certificates_controller {
         return $this->query->count_all_certificates();
     }
 
-    // =========================================================================
     // Batch download methods (delegated to packager class).
-    // =========================================================================
 
     /**
      * Download all certificates as ZIP.
@@ -188,9 +181,7 @@ class block_download_certificates_controller {
         $this->packager->download_cohort_certificates($cohortid);
     }
 
-    // =========================================================================
     // Individual download methods (delegated to packager class).
-    // =========================================================================
 
     /**
      * Download a single tool_certificate file.
@@ -244,9 +235,7 @@ class block_download_certificates_controller {
         $this->packager->download_single_certificatebeautiful($userid, $certificateid, $code);
     }
 
-    // =========================================================================
     // Async task management.
-    // =========================================================================
 
     /**
      * Get pending/ready async tasks for the current user.
