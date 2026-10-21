@@ -32,7 +32,7 @@ namespace block_download_certificates\local;
  * - the user's own certificates are always in scope;
  * - `:manage` in the system context sees every certificate;
  * - otherwise, in each course (never the site course) where the user holds `:downloadcourse` and
- *   could enter the course as `require_login()` decides it, the actively enrolled participants;
+ *   could enter the course ({@see self::can_enter()}), the actively enrolled participants;
  *   under separate groups without `moodle/site:accessallgroups`, only those who share one of the
  *   user's groups (in the course's default grouping) in that course.
  * The optional course and profile user narrow every rule above, the user's own certificates
@@ -148,7 +148,11 @@ final class scope {
     }
 
     /**
-     * Whether the user could enter the course, as `require_login()` decides it for a course.
+     * Whether the user could enter the course through the visibility, active enrolment and
+     * `moodle/course:view` tests of `require_login()`.
+     *
+     * Guest access and an enrolment plugin's auto-enrolment, which `require_login()` also accepts,
+     * do not count.
      *
      * @param \stdClass $course The course record with `visible`.
      * @param \context_course $context The course context.
@@ -293,7 +297,8 @@ final class scope {
      *
      * The enrolment test mirrors the `$onlyactive` branch of core's `get_enrolled_join()` (status
      * of the enrolment and of its instance, start and end dates, time rounded to 100 s), applied
-     * per row instead of per context so that every course shares one subquery.
+     * per row instead of per context so that every course shares one subquery. Core skips that test
+     * on the site course, which never reaches here ({@see self::load_courses()} drops it).
      *
      * @param string $p The placeholder prefix of this call.
      * @param string $useridcol The SQL expression of the certificate owner's id.

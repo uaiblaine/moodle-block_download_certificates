@@ -287,7 +287,7 @@ final class scope_test extends \advanced_testcase {
     /**
      * A hidden course is out of a teacher's scope unless they may view hidden courses there.
      *
-     * The teacher holds a role of its own: the editing teacher archetype may view hidden courses.
+     * The teacher holds a role of its own: both teacher archetypes may view hidden courses.
      */
     public function test_hidden_course_needs_viewhiddencourses(): void {
         $visible = $this->course();

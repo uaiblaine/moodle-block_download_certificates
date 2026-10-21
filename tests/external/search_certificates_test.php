@@ -102,8 +102,8 @@ final class search_certificates_test extends \advanced_testcase {
     }
 
     /**
-     * A user with no course of their own and no manager role opens no panel and is refused; the
-     * same user as a teacher of a course is answered.
+     * A learner, who teaches no course and holds no manager role, opens no panel and is refused; the
+     * same user as a teacher of the course is answered.
      */
     public function test_learner_is_refused(): void {
         $course = $this->getDataGenerator()->create_course();
@@ -120,7 +120,8 @@ final class search_certificates_test extends \advanced_testcase {
 
     /**
      * A teacher gets the certificates of their course only, a manager those of every course; the
-     * rows pass the return structure, names unescaped and the download link without a session key.
+     * rows pass the return structure, names unescaped and the download link without a session key,
+     * and a page size above 200 is cut to 200.
      */
     public function test_teacher_is_limited_to_their_scope(): void {
         if (!(new tool_certificate())->is_available()) {

@@ -335,7 +335,8 @@ final class zip_tasks_test extends \advanced_testcase {
     }
 
     /**
-     * Only the plugin's own error codes are stored; anything else is the generic failure.
+     * Only the plugin's own error codes are stored; anything else, including a plugin code whose
+     * message needs values a stored identifier cannot carry, is the generic failure.
      */
     public function test_error_code(): void {
         $this->assertSame(

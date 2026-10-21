@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Download user's own certificates for block_download_certificates plugin.
+ * Download one user's certificates as a ZIP: the requester's own, or another user's within the scope.
  *
  * @package   block_download_certificates
  * @copyright 2015 Manieer Chhettri

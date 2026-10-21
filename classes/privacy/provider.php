@@ -107,7 +107,8 @@ class provider implements
     /**
      * Export the download requests of the approved user context.
      *
-     * The generated ZIP archive is not exported: it only repackages certificates the user can download elsewhere.
+     * The generated ZIP archive is not exported: it is a temporary copy, deleted once downloaded or expired,
+     * of certificates that the certificate plugins export to their owners.
      *
      * @param approved_contextlist $contextlist The approved contexts to export for.
      * @return void

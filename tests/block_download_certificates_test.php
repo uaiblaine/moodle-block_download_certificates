@@ -138,7 +138,8 @@ final class block_download_certificates_test extends \advanced_testcase {
     }
 
     /**
-     * A manager's numbers count the certificates of the course page, or of the profile's user.
+     * For a manager, the block's first number counts the site, the course of a course page, or the
+     * profile's user (the profile section replaces the manager's on a profile).
      */
     public function test_counts_are_narrowed_to_the_page(): void {
         if (!(new tool_certificate())->is_available()) {

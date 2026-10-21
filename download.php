@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Certificate download handler for block_download_certificates plugin.
+ * Download every certificate, or those issued in a date range, as one ZIP (managers only).
  *
  * @package   block_download_certificates
  * @copyright 2015 Manieer Chhettri

@@ -259,7 +259,8 @@ final class repository_test extends \advanced_testcase {
     }
 
     /**
-     * Menus count per course, owner and cohort; the site course and hidden cohorts stay out.
+     * Menus count per course, owner and cohort; the site course stays out of the course menu, and a
+     * hidden cohort is listed to a manager but not to a teacher without moodle/cohort:view.
      */
     public function test_menus(): void {
         $this->build_data_set();

@@ -243,10 +243,10 @@ final class zip_tasks {
     /**
      * Update a row only while it has the status the caller expects.
      *
-     * The read and the write run under the row's lock, which every status writer of this class
-     * takes: a conditional UPDATE alone cannot tell its caller whether it or a concurrent writer
-     * moved the row (the DML layer reports no affected rows), so two claims of one archive would
-     * both see "expired" and both succeed.
+     * The read and the write run under a core lock named after the row ({@see self::with_row_lock()}),
+     * which every status writer of this class takes: a conditional UPDATE alone cannot tell its
+     * caller whether it or a concurrent writer moved the row (the DML layer reports no affected
+     * rows), so two claims of one archive would both see "expired" and both succeed.
      *
      * @param int $taskid The row id.
      * @param string $expected The status the row must still have.
@@ -350,8 +350,8 @@ final class zip_tasks {
     /**
      * The message of a stored error, in the reader's language.
      *
-     * Rows written before error codes held English text; any value that is not a string
-     * identifier of this plugin reads as the generic failure.
+     * A row written by an upstream release holds an exception message instead; any value that is
+     * not a string identifier of this plugin reads as the generic failure.
      *
      * @param string $error The stored value.
      * @return string

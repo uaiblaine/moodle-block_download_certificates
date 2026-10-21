@@ -11,8 +11,8 @@ people allowed to see them download them:
 
 - managers download every certificate of the site, or those of one course, one user, one cohort
   or one date range;
-- teachers download the certificates of the courses they teach, limited to the groups they can
-  see (stage 1 of the adoption enforces this on every download path; the upstream code does not);
+- teachers download the certificates of the courses where they hold
+  `block/download_certificates:downloadcourse`, limited to the groups they can see;
 - every user downloads their own certificates.
 
 Large downloads are built in the background by a task and offered for download when ready.
@@ -77,9 +77,9 @@ Privacy
 
 The plugin stores one row per background download in `block_download_certificates_tasks`: the
 requesting user, the filter, the status, the path of the generated ZIP and any error. The ZIP
-holds copies of other users' certificates; it is deleted once downloaded, and stage 1 of the
-adoption closes the cases where a failed or abandoned task leaves it behind. The privacy provider
-exports these rows and deletes them, ZIP included.
+holds copies of other users' certificates; it is deleted once downloaded, when its task fails, or
+by the hourly clean-up a day after it was built. The privacy provider exports these rows and
+deletes them, ZIP included.
 
 
 Credits

@@ -141,7 +141,7 @@
 /*
  * Bootstrap 5 names that Moodle 4.5's bridge (theme/boost/scss/moodle/bs5-bridge.scss) lacks, for the
  * plugin's pages only: bootstrap::mark_page() adds the gate class on 4.5. The block cannot be marked
- * and uses none of these. After the branch split this block lives on the 4.5 branch only.
+ * and uses none of these.
  */
 body.block-download-certificates-bs4 .visually-hidden {
     position: absolute;

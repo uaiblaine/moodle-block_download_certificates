@@ -37,9 +37,9 @@ use block_download_certificates\local\zip_tasks;
  * Builds the ZIP of one task row, one batch per run, re-queuing itself until the archive is complete.
  *
  * Every run derives the requester's scope again and checks the request against it: the request was
- * authorised by a scope that may have changed since (S1). The first run freezes the list of issues
+ * authorised by a scope that may have changed since. The first run freezes the list of issues
  * into the task directory; later runs read that list by `batchoffset`, so a certificate issued
- * between two runs neither shifts nor duplicates a batch (D9).
+ * between two runs neither shifts nor duplicates a batch.
  *
  * @package   block_download_certificates
  * @copyright 2025 E-learning Touch <contact@elearningtouch.com>

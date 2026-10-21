@@ -18,8 +18,9 @@
  * instead of posted, its progress shown in a dialogue and, once the dialogue is closed or the page
  * revisited, in a banner; the ready archive is asked for by a POST into a hidden frame.
  *
- * The forms are marked with `data-async-threshold`, on the form or on its submit button, beside
- * `data-download-type` and `data-cert-count`. A form with `data-confirm` asks that question first.
+ * The forms are marked with `data-async-threshold`, on the form itself or on an element inside it,
+ * beside `data-download-type` and `data-cert-count`. A form with `data-confirm` asks that question
+ * first.
  *
  * @module     block_download_certificates/async_download
  * @copyright  2025 E-learning Touch <contact@elearningtouch.com>
@@ -48,7 +49,7 @@ const PAGE_SELECTOR = '.block-download-certificates-page';
 /** @type {number} Milliseconds between two status requests. */
 const POLL_DELAY = 3000;
 
-/** @type {number} The longest wait between two status requests after failures. */
+/** @type {number} Milliseconds: the longest wait between two status requests after failures. */
 const MAX_DELAY = 30000;
 
 /** @type {number} Failed status requests in a row after which polling stops. */
@@ -453,7 +454,8 @@ const applyStatus = (task, status) => {
  */
 const poll = async(task) => {
     if (task.inflight || !task.roots.size) {
-        // Nothing shows the task any more: the next visit picks it up again.
+        // A request in flight schedules the next one itself; a task nothing shows any more is picked
+        // up again on the next visit.
         return;
     }
     task.inflight = true;
@@ -521,7 +523,8 @@ const queue = async(args) => {
 };
 
 /**
- * The element carrying a form's background download marks: the form or its submit button.
+ * The element carrying a form's background download marks: the form, else the first marked element
+ * inside it.
  *
  * @param {HTMLFormElement} form The form.
  * @returns {HTMLElement|null}

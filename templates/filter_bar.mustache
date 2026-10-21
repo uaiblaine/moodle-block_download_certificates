@@ -19,8 +19,8 @@
 
     The download tabs of the manager and teacher pages: a date range, or one course, cohort or user
     picked from a menu, each a POST form to its ZIP page. The first tab starts selected; Bootstrap
-    moves the selection and its state. On Moodle 4.5, certificate_table.js gives the tabs the
-    attributes Bootstrap 4 listens to.
+    moves the selection and its state. Each tab carries both data-toggle (Bootstrap 4, Moodle 4.5)
+    and data-bs-toggle (Bootstrap 5, Moodle 5.x).
 
     Data attributes required for JS (async_download.js):
     * data-download-type, data-cert-count, data-async-threshold - The background download marks.

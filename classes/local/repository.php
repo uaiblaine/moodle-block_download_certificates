@@ -236,7 +236,8 @@ class repository {
      * The cohorts whose members hold certificates in scope, for menus.
      *
      * A cohort is listed when it is visible or the scope's user holds `moodle/cohort:view` in its
-     * context, the rule of core's `cohort_get_available_cohorts()`.
+     * context: the visibility test of core's `cohort_get_available_cohorts()`, without its limit to
+     * the parent contexts of a current context.
      *
      * @param scope $scope Who is asking.
      * @return \stdClass[] Keyed by cohort id: id, name (formatted in the cohort's context, not escaped),

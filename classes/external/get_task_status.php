@@ -56,7 +56,7 @@ class get_task_status extends external_api {
      *
      * @param int $taskid The task.
      * @return array As {@see self::execute_returns()}.
-     * @throws \moodle_exception `noguest`, `tasknotfound`, or `accessdenied` for another user's task.
+     * @throws \moodle_exception `noguest`, or `tasknotfound` for a missing task and for another user's.
      */
     public static function execute(int $taskid): array {
         global $USER;

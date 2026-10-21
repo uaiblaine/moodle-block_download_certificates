@@ -37,7 +37,7 @@ require_once($CFG->dirroot . '/blocks/download_certificates/tests/fixtures/issue
  * A request builds a ZIP only up to the synchronous limit, in its own request directory.
  *
  * Skipped, not green, where tool_certificate is not installed. The send_* methods end the request
- * and are left to stage 1b's entry-point tests.
+ * and are not called here; the checks they rely on are tested in script_guards_test and request_test.
  *
  * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
  * read attributes and warns per method.
@@ -97,7 +97,7 @@ final class download_test extends \advanced_testcase {
     }
 
     /**
-     * An empty selection is refused.
+     * An empty selection is refused: the one issue predates the filter's first day.
      */
     public function test_build_zip_refuses_empty_selection(): void {
         $this->issues(1, false);

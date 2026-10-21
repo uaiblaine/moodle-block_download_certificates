@@ -77,7 +77,7 @@ final class script_guards_test extends \advanced_testcase {
 
     /**
      * A teacher's single download reaches a certificate of their course and not one of another
-     * course; the owner reaches their own.
+     * course; the owner reaches their own, and an unknown issue id is reported as not found.
      */
     public function test_single_download_follows_the_scope(): void {
         if (!(new tool_certificate())->is_available()) {

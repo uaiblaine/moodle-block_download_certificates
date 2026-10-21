@@ -25,13 +25,13 @@
 namespace block_download_certificates\local;
 
 /**
- * Tells the stylesheet and the page module which Bootstrap major version the site runs.
+ * Tells the stylesheet which Bootstrap major version the site runs.
  *
  * Moodle 4.5 ships Bootstrap 4, whose forward bridge (theme/boost/scss/moodle/bs5-bridge.scss) maps
  * only g-0, btn-close, the start/end spacers, floats, text alignment, borders and roundings. The
- * pages use Bootstrap 5 names alone; styles.css polyfills the other ones they use, and
- * certificate_table.js gives the tabs the attributes Bootstrap 4's data-API listens to, both gated
- * on a body class only 4.5 receives. An ungated rule would outrank core's own definition on 5.x.
+ * pages use Bootstrap 5 class names alone; styles.css polyfills the other ones they use, gated on a
+ * body class only 4.5 receives, so that 5.x keeps core's own definitions. Data-API attributes need
+ * no marker: the templates write both `data-bs-*` and `data-*` on the same element.
  *
  * The block renders inside pages the plugin does not own, after the header, so it cannot add a body
  * class: its markup uses no name this polyfill provides.

@@ -38,9 +38,8 @@ $taskid = required_param('taskid', PARAM_INT);
 $PAGE->set_context(context_system::instance());
 $PAGE->set_url('/blocks/download_certificates/ajax/download_zip.php');
 
-// The row is claimed (ready to expired) before sending, so a second request for it is refused.
-// send_temp_file() deletes the file and ends the request, so nothing can run after it: the expired
-// row's task directory is removed by the cleanup_expired task, which deletes the directory of every
-// expired row. An interrupted transfer costs the archive; the user requests it again.
+// The row is claimed (ready to expired) before sending, so a second request for it is refused and an
+// interrupted transfer costs the archive: the user requests it again. send_temp_file() deletes the file
+// and ends the request; the task directory is left to the cleanup_expired task.
 [$zippath, $filename] = zip_tasks::claim_download($taskid, (int) $USER->id);
 send_temp_file($zippath, $filename);

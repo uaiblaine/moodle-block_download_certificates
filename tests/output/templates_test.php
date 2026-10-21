@@ -251,7 +251,8 @@ final class templates_test extends \advanced_testcase {
      * The markup holds together: referenced ids exist, fields are named, no inline style or handler,
      * no Mustache left over.
      *
-     * The control: the same checks on a label pointing at a missing id, and an unnamed select, fail.
+     * The control: the same checks fail on a label pointing at a missing id with an unnamed select,
+     * and on an inline style with a handler.
      */
     public function test_rendered_markup_holds_together(): void {
         foreach ($this->render_everything() as $name => $html) {
@@ -423,7 +424,7 @@ final class templates_test extends \advanced_testcase {
     }
 
     /**
-     * A template, course and cohort name with `&`, `<` and `"` reach the block's list, its link label,
+     * A template, course and cohort name with `&` and `"` reach the block's list, its link label,
      * the manager page's menus and the table rows escaped exactly once: the markup holds the entity
      * the character needs, never an entity of an entity, and the parsed text is the name as typed.
      *

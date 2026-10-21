@@ -399,8 +399,8 @@ final class bootstrap_compat_test extends \basic_testcase {
 
     /**
      * Every Bootstrap data-API attribute is written twice, `data-bs-*` for 5.x and `data-*` for
-     * Moodle 4.5's Bootstrap 4, on the same element, as the fleet rule for plugins that support 4.5
-     * asks; nothing in the JavaScript copies one into the other.
+     * Moodle 4.5's Bootstrap 4, on the same element; nothing in the JavaScript copies one into the
+     * other.
      *
      * Changes that must make it fail: drop `data-toggle="tab"` from filter_bar; add a JS bridge that
      * writes `dataset.toggle`.
@@ -461,7 +461,7 @@ final class bootstrap_compat_test extends \basic_testcase {
      * No inline style or event handler in the markup: styles live in styles.css, behaviour in the
      * modules, and a translated string never lands inside JavaScript code.
      *
-     * Change that must make it fail: put `style="min-width: 250px;"` back on a menu of filter_bar.
+     * Change that must make it fail: put `style="min-width: 250px;"` on a menu of filter_bar.
      */
     public function test_no_inline_styles_or_handlers(): void {
         $offenders = [];

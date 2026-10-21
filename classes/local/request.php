@@ -29,7 +29,8 @@ namespace block_download_certificates\local;
  * for, how request values become a filter, and how a failure is told to the client.
  *
  * A ZIP request names one of {@see self::TYPES}; the same check runs when the request arrives
- * (synchronous download or task creation) and again when the background task runs.
+ * (synchronous download or task creation), again when the background task runs, and once more
+ * before its archive is handed over.
  *
  * @package   block_download_certificates
  * @copyright 2026 Anderson Blaine

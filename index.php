@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Main controller for block_download_certificates plugin.
+ * Manager page: every certificate on the site, its download tabs and table (needs `:manage`).
  *
  * @package   block_download_certificates
  * @copyright 2015 Manieer Chhettri

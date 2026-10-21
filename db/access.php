@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Database access definitions for block_download_certificates plugin.
+ * Capability definitions for block_download_certificates.
  *
  * @package   block_download_certificates
  * @copyright 2015 Manieer Chhettri

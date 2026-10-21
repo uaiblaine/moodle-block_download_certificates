@@ -169,7 +169,8 @@ final class tool_certificate_test extends \advanced_testcase {
     }
 
     /**
-     * A single download is refused outside the scope and served inside it.
+     * A single download is refused outside the scope and served inside it; an unknown id, or an id
+     * asked of the wrong source, is reported as not found.
      */
     public function test_single_download_scope_check(): void {
         $gen = $this->getDataGenerator();

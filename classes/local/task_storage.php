@@ -155,7 +155,7 @@ final class task_storage {
     }
 
     /**
-     * Whether a path lies inside the task directories: the only paths cleanup may delete.
+     * Whether a path lies strictly inside the task directories, symbolic links and `..` resolved.
      *
      * @param string $path An absolute path, typically a task row's stored file path.
      * @return bool False for a path that does not exist or resolves elsewhere.

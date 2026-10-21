@@ -107,7 +107,8 @@ final class task_storage_test extends \advanced_testcase {
     }
 
     /**
-     * Deleting a task's directory leaves another task's untouched.
+     * Deleting a task's directory leaves another task's untouched; deleting one that was never made
+     * is harmless.
      */
     public function test_delete_leaves_other_task(): void {
         task_storage::write_refs(401, [['customcert', 1]]);

@@ -38,10 +38,10 @@ use block_download_certificates\local\scope;
  *   the course's ZIP; the user's own certificates of that course are listed one by one, because
  *   the own-certificates ZIP would hold every course.
  * - A user profile: that user's certificates within the viewer's scope, listed, with a ZIP of
- *   exactly those; nothing at all when the scope does not reach that user.
+ *   exactly those; nothing at all when the scope holds none of them, unless the viewer is a manager.
  *
- * Every number and list comes from the stage-1 scope, so what the block counts is what the ZIP
- * pages, which re-derive the scope, send.
+ * Every number and list comes from {@see scope}, so what the block counts is what the ZIP pages,
+ * which re-derive the scope, send.
  *
  * @package   block_download_certificates
  * @copyright 2026 Anderson Blaine

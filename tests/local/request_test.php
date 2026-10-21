@@ -280,8 +280,8 @@ final class request_test extends \advanced_testcase {
 
     /**
      * The group menu follows the scope's group rule: a teacher under separate groups gets their own
-     * groups, a manager and a teacher with `moodle/site:accessallgroups` every group, an outsider
-     * nothing.
+     * groups, a manager and a teacher with `moodle/site:accessallgroups` every group; a course outside
+     * the user's courses is refused.
      */
     public function test_course_groups_follow_the_group_rule(): void {
         $gen = $this->getDataGenerator();

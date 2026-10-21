@@ -106,8 +106,8 @@ final class create_task_test extends \advanced_testcase {
     }
 
     /**
-     * The guest account is refused before anything is checked or written; a manager's request of the
-     * same type gets past that guard.
+     * The guest account is refused before its request is checked or anything is written; a manager's
+     * request of the same type gets past that guard.
      */
     public function test_guest_is_refused(): void {
         global $DB;

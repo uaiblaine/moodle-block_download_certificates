@@ -49,7 +49,7 @@ final class block_content_test extends \advanced_testcase {
     /** @var \stdClass Course B. */
     private \stdClass $courseb;
 
-    /** @var \stdClass A student of course A, with a certificate in A and one in B. */
+    /** @var \stdClass A student of courses A and B, with a certificate in each. */
     private \stdClass $ada;
 
     /** @var \stdClass A student of course B, with a certificate in B. */

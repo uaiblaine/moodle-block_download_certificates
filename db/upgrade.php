@@ -26,7 +26,7 @@
 /**
  * Upgrade the plugin.
  *
- * Versions are numbered in the range of the Moodle version a branch requires (5.3: 20261005XX,
+ * Versions are numbered in the range of the Moodle version a branch targets (5.3: 20261005XX,
  * 5.2: 20260420XX, 5.1: 20251006XX, 4.5: 20241007XX), so a release for one Moodle version never
  * carries the number of another. Upstream releases were numbered by date up to 2026100700, above
  * those ranges: a site coming from upstream 1.6.1 sets its version to the switch number README.md
@@ -68,7 +68,8 @@ function xmldb_block_download_certificates_upgrade($oldversion) {
         // with no block context; core never renders such a row.
         $DB->delete_records('block_instances', ['blockname' => 'download_certificat']);
 
-        // Upstream kept ZIPs of other users' certificates in this directory and never cleaned it up.
+        // Upstream kept every user's background ZIPs in this shared directory and left some behind (failed
+        // rows were deleted without their file); ZIPs now live under task_storage::BASEDIR.
         if (is_dir($CFG->tempdir . '/block_download_certificates/async')) {
             remove_dir(make_temp_directory('block_download_certificates/async'));
         }

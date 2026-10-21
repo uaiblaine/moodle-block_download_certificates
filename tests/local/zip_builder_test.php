@@ -105,7 +105,8 @@ final class zip_builder_test extends \advanced_testcase {
 
     /**
      * A failing issue leaves the others in the archive and one localised line in errors.txt, with no
-     * text from foreign exceptions.
+     * text from foreign exceptions; an unknown issue and an unavailable source get a line each too,
+     * and the progress callback counts every reference.
      */
     public function test_failing_issue_keeps_the_others(): void {
         $this->source->add_issue(1, 'one.pdf');

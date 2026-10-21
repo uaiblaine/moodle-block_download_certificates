@@ -85,8 +85,8 @@ final class get_groups_test extends \advanced_testcase {
     }
 
     /**
-     * A non-editing teacher under separate groups gets their own group only, with its name not
-     * escaped; another course is refused, and so is a learner's course.
+     * A non-editing teacher under separate groups gets their own group only, its name stripped of
+     * tags but not escaped; the course they are only a learner in is refused.
      */
     public function test_teacher_gets_their_groups_of_their_courses(): void {
         $gen = $this->getDataGenerator();

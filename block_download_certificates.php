@@ -30,8 +30,6 @@ use block_download_certificates\output\block_content;
 /**
  * Block download_certificates class.
  *
- * This class defines the download certificates block functionality.
- *
  * @package   block_download_certificates
  * @copyright 2015 Manieer Chhettri
  * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
@@ -130,9 +128,8 @@ class block_download_certificates extends block_base {
     }
 
     /**
-     * Copy any block-specific data when copying to a new block instance.
-     * Since this block does not use instance-specific custom tables,
-     * we simply return true to allow the dashboard duplication to proceed.
+     * Copy block-specific data to a new block instance: there is none, the block keeps no
+     * per-instance configuration or rows.
      *
      * @param int $fromid original block instance id
      * @return boolean

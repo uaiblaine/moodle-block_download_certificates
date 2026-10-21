@@ -69,7 +69,7 @@ let tablerequest = 0;
 /** @type {number} Increases with every group request; a response for an older one is dropped. */
 let grouprequest = 0;
 
-/** @type {boolean} Whether init() ran: the block and the page may both ask for the module. */
+/** @type {boolean} Whether init() ran: a second call would bind every listener twice. */
 let initialised = false;
 
 /**

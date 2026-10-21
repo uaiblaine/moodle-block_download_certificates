@@ -77,14 +77,19 @@ See `moodle-dev/cloud/README.md`.
 
 - File headers keep the upstream `@copyright` lines (GPL notices) above
   `@copyright 2026 Anderson Blaine`; no `@author`. New files carry only the 2026 line.
-- `$DB->get_dbcollation()` exists only in the mysqli driver: calling it fatals on PostgreSQL,
-  which every stack runs. No `COLLATE` or `CAST(... AS CHAR(n))` in the certificate unions.
-- Stage 1 targets, not yet true of the code (the audit's S1, S2):
-  - One scope (course id => visible user ids) decides search, counts, single downloads, request
-    ZIPs and the background task alike; the task re-derives it when it runs, because the request
-    that queued it was authorised by a scope that may have changed.
-  - A background ZIP lives in a directory of its own task id: names built from course or user
-    names collided between users upstream.
+- `$DB->get_dbcollation()` exists only in the mysqli driver: calling it fatals on PostgreSQL.
+  No `COLLATE` or `CAST(... AS CHAR(n))` in the certificate unions.
+- One scope (`classes/local/scope.php`: course id => null or the viewer's group ids, evaluated in
+  SQL) decides search, counts, single downloads, request ZIPs, the background task and the ZIP
+  hand-over; the task re-derives it on every run and re-checks each issue, because the request that
+  queued it was authorised by a scope that may have changed.
+- A background ZIP lives in the directory of its own task id (`task_storage`); names built from
+  course or user names collided between users upstream.
+- Every status write of a task row runs under the core lock named after the row
+  (`zip_tasks::with_row_lock()`): a conditional UPDATE cannot tell its caller whether it or a
+  concurrent writer moved the row, because the DML layer reports no affected rows.
+- Blocks render through `$this->page->get_renderer('core')`, never `$OUTPUT`: in a test `$OUTPUT`
+  is the bootstrap renderer until a page prints its header.
 - `db/upgrade.php` first step reads the schema, not `$oldversion`: sites from upstream arrive by a
   hand-set switch number (README), which says nothing about which upstream steps ran.
 
