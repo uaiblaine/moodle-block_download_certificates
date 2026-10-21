@@ -207,6 +207,30 @@ final class request_test extends \advanced_testcase {
     }
 
     /**
+     * A range that ends at or before its start, and a user request without a user, are refused;
+     * the same requests with valid values pass.
+     */
+    public function test_check_zip_refuses_a_bad_range_and_a_user_request_without_a_user(): void {
+        $manager = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->role_assign('manager', $manager->id);
+        $student = $this->getDataGenerator()->create_user();
+        $scope = scope::for_user((int) $manager->id);
+
+        $this->assertNull($this->error_of(fn() => request::check_zip($scope, 'range', new filter(datefrom: 1000, dateto: 2000))));
+        $this->assertSame(
+            'invalidaterange',
+            $this->error_of(fn() => request::check_zip($scope, 'range', new filter(datefrom: 2000, dateto: 2000)))
+        );
+        $this->assertSame(
+            'invalidaterange',
+            $this->error_of(fn() => request::check_zip($scope, 'range', new filter(datefrom: 2000, dateto: 1000)))
+        );
+
+        $this->assertNull($this->error_of(fn() => request::check_zip($scope, 'user', new filter(userid: $student->id))));
+        $this->assertSame('invalidparameters', $this->error_of(fn() => request::check_zip($scope, 'user', new filter())));
+    }
+
+    /**
      * A user who reaches nobody else may ask for their own certificates only.
      */
     public function test_check_zip_keeps_a_learner_to_their_own(): void {

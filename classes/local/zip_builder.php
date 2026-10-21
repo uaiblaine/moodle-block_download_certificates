@@ -75,10 +75,12 @@ class zip_builder {
      * @param array $refs List of [string $type, int $issueid].
      * @param string $zippath The archive path.
      * @param callable|null $progress Called with the number of references processed so far.
+     * @param scope|null $scope When given, an issue outside it is skipped with an error line: a list
+     *        frozen earlier is checked again as each issue is added.
      * @return string[] The errors of this call, one line per failed issue.
      * @throws \moodle_exception When the archive cannot be opened or written.
      */
-    public function build(array $refs, string $zippath, ?callable $progress = null): array {
+    public function build(array $refs, string $zippath, ?callable $progress = null, ?scope $scope = null): array {
         $this->open($zippath);
         $errors = [];
         $processed = 0;
@@ -94,6 +96,9 @@ class zip_builder {
                     $issue = $source->get_issue($issueid);
                     if (!$issue) {
                         throw new \moodle_exception('certificatenotfound', 'block_download_certificates');
+                    }
+                    if ($scope && !$scope->can_see((int) $issue->userid, (int) $issue->courseid)) {
+                        throw new \moodle_exception('zip_error_outofscope', 'block_download_certificates');
                     }
                     $this->add($source, $issue);
                 } catch (\Throwable $e) {

@@ -41,5 +41,6 @@ $PAGE->set_url('/blocks/download_certificates/ajax/download_zip.php', ['taskid' 
 [$zippath, $filename] = zip_tasks::prepare_download($taskid, (int) $USER->id);
 
 // Expired once the bytes went out: shutdown functions run after send_temp_file() ends the request.
+// An interrupted transfer expires the task too, and the user requests the archive again.
 \core\shutdown_manager::register_function([zip_tasks::class, 'expire'], [$taskid]);
 send_temp_file($zippath, $filename);

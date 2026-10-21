@@ -85,7 +85,11 @@ class generate_zip extends \core\task\adhoc_task {
         try {
             $this->run_batch($task);
         } catch (\Throwable $e) {
-            zip_tasks::fail($taskid, zip_tasks::error_code($e));
+            // A row the cleanup failed meanwhile keeps its own reason.
+            $status = $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $taskid]);
+            if (in_array($status, [zip_tasks::STATUS_PENDING, zip_tasks::STATUS_PROCESSING], true)) {
+                zip_tasks::fail($taskid, zip_tasks::error_code($e));
+            }
             mtrace("Certificate ZIP task {$taskid} failed: " . get_class($e) . ': ' . $e->getMessage());
         }
     }
@@ -106,8 +110,6 @@ class generate_zip extends \core\task\adhoc_task {
      * @throws \moodle_exception When the request is no longer allowed, empty, or cannot be written.
      */
     private function run_batch(\stdClass $task): void {
-        global $DB;
-
         $taskid = (int) $task->id;
         [$scope, $filter] = $this->get_checked_request($task);
         $repository = new repository();
@@ -121,8 +123,7 @@ class generate_zip extends \core\task\adhoc_task {
             }
             task_storage::write_refs($taskid, $refs);
             $offset = 0;
-            $DB->update_record(zip_tasks::TABLE, (object) [
-                'id' => $taskid,
+            $moved = zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PENDING, [
                 'status' => zip_tasks::STATUS_PROCESSING,
                 'total' => count($refs),
                 'progress' => 0,
@@ -130,34 +131,41 @@ class generate_zip extends \core\task\adhoc_task {
                 'filepath' => $zippath,
                 'timemodified' => time(),
             ]);
+            if (!$moved) {
+                $this->abandon($taskid);
+                return;
+            }
         }
 
         $refs = task_storage::read_refs($taskid);
         $total = count($refs);
         $batch = array_slice($refs, $offset, max(1, $this->get_batch_size()));
 
-        $progress = static function (int $processed) use ($DB, $taskid, $offset): void {
+        $progress = static function (int $processed) use ($taskid, $offset): void {
             if ($processed % self::PROGRESS_STEP === 0) {
-                $DB->update_record(zip_tasks::TABLE, (object) [
-                    'id' => $taskid,
+                zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PROCESSING, [
                     'progress' => $offset + $processed,
                     'timemodified' => time(),
                 ]);
             }
         };
-        $errors = (new zip_builder($repository->get_sources()))->build($batch, $zippath, $progress);
+        // The scope is checked again for each issue: the frozen list may be older than a membership change.
+        $errors = (new zip_builder($repository->get_sources()))->build($batch, $zippath, $progress, $scope);
         if ($errors) {
             mtrace("Certificate ZIP task {$taskid}: " . count($errors) . ' certificates could not be added.');
         }
 
         $offset += count($batch);
         if ($offset < $total) {
-            $DB->update_record(zip_tasks::TABLE, (object) [
-                'id' => $taskid,
+            $moved = zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PROCESSING, [
                 'progress' => $offset,
                 'batchoffset' => $offset,
                 'timemodified' => time(),
             ]);
+            if (!$moved) {
+                $this->abandon($taskid);
+                return;
+            }
             $next = new self();
             $next->set_custom_data((object) ['taskid' => $taskid]);
             \core\task\manager::queue_adhoc_task($next);
@@ -167,14 +175,28 @@ class generate_zip extends \core\task\adhoc_task {
         if (!is_file($zippath)) {
             throw new \moodle_exception('cannotcreatezipfile', 'block_download_certificates');
         }
-        $DB->update_record(zip_tasks::TABLE, (object) [
-            'id' => $taskid,
+        $moved = zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PROCESSING, [
             'status' => zip_tasks::STATUS_READY,
             'progress' => $total,
             'batchoffset' => $total,
             'filepath' => $zippath,
             'timemodified' => time(),
         ]);
+        if (!$moved) {
+            $this->abandon($taskid);
+        }
+    }
+
+    /**
+     * Stop working on a row that something else (the cleanup) moved on while this run was building.
+     *
+     * The row keeps its status and reason; what this run wrote into the task directory goes.
+     *
+     * @param int $taskid The row id.
+     */
+    private function abandon(int $taskid): void {
+        task_storage::delete($taskid);
+        mtrace("Certificate ZIP task {$taskid} changed status while it ran, dropping the run.");
     }
 
     /**

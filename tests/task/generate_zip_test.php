@@ -73,21 +73,30 @@ final class generate_zip_test extends \advanced_testcase {
      * Run one batch of a row, with a batch size of two, without its trace output.
      *
      * @param int $taskid The row id.
+     * @param callable|null $midrun Called once the run has read its batch size, that is after the
+     *        row went to processing and before the batch is built.
      * @return \stdClass The row afterwards.
      */
-    private function run_batch(int $taskid): \stdClass {
+    private function run_batch(int $taskid, ?callable $midrun = null): \stdClass {
         global $DB;
 
         $task = new class extends generate_zip {
+            /** @var callable|null Called when the batch size is read. */
+            public $midrun = null;
+
             /**
              * Two certificates per run, so that three need two runs.
              *
              * @return int
              */
             protected function get_batch_size(): int {
+                if ($this->midrun) {
+                    ($this->midrun)();
+                }
                 return 2;
             }
         };
+        $task->midrun = $midrun;
         $task->set_custom_data((object) ['taskid' => $taskid]);
         ob_start();
         try {
@@ -257,5 +266,103 @@ final class generate_zip_test extends \advanced_testcase {
 
         $this->assertSame(zip_tasks::STATUS_EXPIRED, $row->status);
         $this->assertFalse(task_storage::has_refs($taskid));
+    }
+
+    /**
+     * A group membership removed between two batches takes that user's certificates out of the
+     * archive, with a line in errors.txt; the same request without the removal has all of them.
+     */
+    public function test_later_batches_are_checked_against_the_current_scope(): void {
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['groupmode' => SEPARATEGROUPS]);
+        $teacher = $gen->create_user();
+        $ada = $gen->create_user(['firstname' => 'Ada', 'lastname' => 'Lovelace']);
+        $grace = $gen->create_user(['firstname' => 'Grace', 'lastname' => 'Hopper']);
+        $gen->enrol_user($teacher->id, $course->id, 'teacher');
+        $gen->enrol_user($ada->id, $course->id, 'student');
+        $gen->enrol_user($grace->id, $course->id, 'student');
+        $group = $gen->create_group(['courseid' => $course->id]);
+        foreach ([$teacher, $ada, $grace] as $member) {
+            $gen->create_group_member(['groupid' => $group->id, 'userid' => $member->id]);
+        }
+        $template = issue_factory::tool_certificate_template('Gold', true)->get_id();
+        issue_factory::tool_certificate_issue($template, (int) $ada->id, (int) $course->id, 1001, 'ADA1');
+        issue_factory::tool_certificate_issue($template, (int) $ada->id, (int) $course->id, 1002, 'ADA2');
+        issue_factory::tool_certificate_issue($template, (int) $grace->id, (int) $course->id, 1003, 'GRACE1');
+        $filter = new filter(courseid: (int) $course->id);
+        $control = (int) zip_tasks::create(scope::for_user((int) $teacher->id), 'course', $filter)->id;
+        $taskid = (int) zip_tasks::create(scope::for_user((int) $teacher->id), 'course', $filter)->id;
+        $gracefile = 'tool_certificate/' . clean_filename('Grace Hopper_Gold_GRACE1.pdf');
+
+        $this->assertSame(zip_tasks::STATUS_PROCESSING, $this->run_batch($control)->status);
+        $this->assertSame(zip_tasks::STATUS_READY, $this->run_batch($control)->status);
+        $entries = $this->entries(task_storage::get_zip_path($control));
+        $this->assertCount(3, $entries);
+        $this->assertContains($gracefile, $entries);
+        $this->assertNotContains(zip_builder::ERRORS_ENTRY, $entries);
+
+        $this->assertSame(zip_tasks::STATUS_PROCESSING, $this->run_batch($taskid)->status);
+        groups_remove_member($group->id, $grace->id);
+        $row = $this->run_batch($taskid);
+
+        $this->assertSame(zip_tasks::STATUS_READY, $row->status);
+        $zippath = task_storage::get_zip_path($taskid);
+        $entries = $this->entries($zippath);
+        $this->assertNotContains($gracefile, $entries);
+        $this->assertContains(zip_builder::ERRORS_ENTRY, $entries);
+        $this->assertCount(3, $entries);
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($zippath));
+        $errors = $zip->getFromName(zip_builder::ERRORS_ENTRY);
+        $zip->close();
+        $this->assertStringContainsString(get_string('zip_error_outofscope', 'block_download_certificates'), $errors);
+        $this->assertStringNotContainsString('Hopper', $errors);
+    }
+
+    /**
+     * A row that something else failed while the task was running stays failed, with its reason: no
+     * next batch is queued, no archive is left; an untouched row reaches ready.
+     */
+    public function test_status_writes_do_not_overwrite_a_row_failed_meanwhile(): void {
+        global $DB;
+
+        $owner = $this->getDataGenerator()->create_user();
+        $template = issue_factory::tool_certificate_template('Gold', true)->get_id();
+        for ($i = 1; $i <= 3; $i++) {
+            issue_factory::tool_certificate_issue($template, (int) $owner->id, 0, 1000 + $i, 'CODE' . $i);
+        }
+        $manager = $this->manager();
+        $failrow = function (int $taskid) use ($DB): void {
+            $DB->set_field(zip_tasks::TABLE, 'status', zip_tasks::STATUS_FAILED, ['id' => $taskid]);
+            $DB->set_field(zip_tasks::TABLE, 'error', 'taskerror_timeout', ['id' => $taskid]);
+        };
+
+        // Three certificates, two batches: the run would queue the next batch.
+        $multi = (int) zip_tasks::create(scope::for_user((int) $manager->id), 'all', new filter())->id;
+        $queued = count(\core\task\manager::get_adhoc_tasks(generate_zip::class));
+        $row = $this->run_batch($multi, fn() => $failrow($multi));
+        $this->assertSame(zip_tasks::STATUS_FAILED, $row->status);
+        $this->assertSame('taskerror_timeout', $row->error);
+        $this->assertCount($queued, \core\task\manager::get_adhoc_tasks(generate_zip::class));
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory($multi));
+
+        // One batch: the run would mark the row ready.
+        $solo = $this->getDataGenerator()->create_user();
+        issue_factory::tool_certificate_issue($template, (int) $solo->id, 0, 2000, 'SOLO');
+        $single = (int) zip_tasks::create(
+            scope::for_user((int) $manager->id),
+            'user',
+            new filter(userid: (int) $solo->id)
+        )->id;
+        $row = $this->run_batch($single, fn() => $failrow($single));
+        $this->assertSame(zip_tasks::STATUS_FAILED, $row->status);
+        $this->assertSame('taskerror_timeout', $row->error);
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory($single));
+
+        // Control: the same request, untouched, finishes.
+        $control = (int) zip_tasks::create(scope::for_user((int) $manager->id), 'all', new filter())->id;
+        $this->assertSame(zip_tasks::STATUS_PROCESSING, $this->run_batch($control)->status);
+        $this->assertSame(zip_tasks::STATUS_READY, $this->run_batch($control)->status);
+        $this->assertFileExists(task_storage::get_zip_path($control));
     }
 }

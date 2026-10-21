@@ -66,6 +66,17 @@ Fleet adoption, stages 0, 1a and 1b (`docs/fleet-audit-2026-10-21.md`).
     D7).
   - The AJAX scripts answer JSON with its content type, and a failure shows the plugin's own
     localised reason, never another component's exception text (S9, server side).
+  - A background ZIP built in several runs kept certificates of users the requester had lost
+    sight of between runs (a group membership removed, an enrolment suspended); each certificate is
+    now checked against the requester's current scope as it is added, and one that is out of scope
+    is left out and named in `errors.txt` by type and number only.
+  - The task's status changes were unconditional, so a download the cleanup had failed could be
+    overwritten by a later "ready"; each change now applies only if the row still has the status
+    the task expects, and a task that lost its row removes what it built.
+  - A ready archive was handed over without asking again whether its owner may still download; the
+    download script now repeats the access check and refuses with "Access denied".
+  - The upgrade removes the ZIP directory upstream left in the temp directory, which held other
+    users' certificates and was never cleaned.
   - The guest account is refused everywhere; `download_precise.php` loads `config.php` from its
     own directory and checks the session key with `require_sesskey()` (S10, S11).
   - The background request's JSON was used unchecked and its dates were read in the server's time

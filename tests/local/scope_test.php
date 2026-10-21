@@ -285,6 +285,71 @@ final class scope_test extends \advanced_testcase {
     }
 
     /**
+     * A hidden course is out of a teacher's scope unless they may view hidden courses there.
+     *
+     * The teacher holds a role of its own: the editing teacher archetype may view hidden courses.
+     */
+    public function test_hidden_course_needs_viewhiddencourses(): void {
+        $visible = $this->course();
+        $hidden = $this->getDataGenerator()->create_course(['visible' => 0]);
+        $roleid = $this->role_with(['block/download_certificates:downloadcourse']);
+        $teacher = $this->getDataGenerator()->create_user();
+        $student = $this->enrolled($visible, 'student');
+        foreach ([$visible, $hidden] as $course) {
+            $this->getDataGenerator()->enrol_user($teacher->id, $course->id, $roleid);
+        }
+        $this->getDataGenerator()->enrol_user($student->id, $hidden->id, 'student');
+
+        $scope = scope::for_user((int) $teacher->id);
+        $this->assertTrue($scope->can_see((int) $student->id, (int) $visible->id));
+        $this->assertFalse($scope->can_see((int) $student->id, (int) $hidden->id));
+        $this->assertSame([(int) $visible->id], $scope->get_course_ids());
+
+        assign_capability('moodle/course:viewhiddencourses', CAP_ALLOW, $roleid, \context_system::instance()->id, true);
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $scope = scope::for_user((int) $teacher->id);
+        $this->assertTrue($scope->can_see((int) $student->id, (int) $hidden->id));
+    }
+
+    /**
+     * A student enrolment that starts in the future is not an active participant; one that started
+     * in the past is.
+     */
+    public function test_enrolment_not_started_is_excluded(): void {
+        $course = $this->course();
+        $teacher = $this->enrolled($course, 'teacher');
+        $future = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($future->id, $course->id, 'student', 'manual', time() + DAYSECS);
+        $past = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($past->id, $course->id, 'student', 'manual', time() - DAYSECS);
+
+        $scope = scope::for_user((int) $teacher->id);
+        $this->assertFalse($scope->can_see((int) $future->id, (int) $course->id));
+        $this->assertTrue($scope->can_see((int) $past->id, (int) $course->id));
+    }
+
+    /**
+     * The enrolment that counts is the one in the certificate's course: an active enrolment in
+     * course B does not admit a certificate of course A where the student is suspended.
+     */
+    public function test_enrolment_is_tied_to_the_certificates_course(): void {
+        $coursea = $this->course();
+        $courseb = $this->course();
+        $teacher = $this->enrolled($coursea, 'teacher');
+        $this->getDataGenerator()->enrol_user($teacher->id, $courseb->id, 'teacher');
+        $student = $this->enrolled($coursea, 'student', ENROL_USER_SUSPENDED);
+        $this->getDataGenerator()->enrol_user($student->id, $courseb->id, 'student');
+
+        $scope = scope::for_user((int) $teacher->id);
+        $this->assertFalse($scope->can_see((int) $student->id, (int) $coursea->id));
+        $this->assertTrue($scope->can_see((int) $student->id, (int) $courseb->id));
+
+        $this->getDataGenerator()->enrol_user($student->id, $coursea->id, 'student', 'manual', 0, 0, ENROL_USER_ACTIVE);
+        $this->assertTrue(scope::for_user((int) $teacher->id)->can_see((int) $student->id, (int) $coursea->id));
+    }
+
+    /**
      * A teacher whose own enrolment is suspended can no longer enter, so loses the course.
      */
     public function test_suspended_teacher_loses_course(): void {

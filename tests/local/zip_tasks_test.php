@@ -63,15 +63,16 @@ final class zip_tasks_test extends \advanced_testcase {
      *
      * @param int $userid The owner.
      * @param string $status The status.
+     * @param int $courseid The course of the row's `course` request.
      * @return int The row id.
      */
-    private function add_task(int $userid, string $status): int {
+    private function add_task(int $userid, string $status, int $courseid = 5): int {
         global $DB;
 
         return (int) $DB->insert_record(zip_tasks::TABLE, (object) [
             'userid' => $userid,
             'type' => 'course',
-            'params' => json_encode((new filter(courseid: 5))->to_array()),
+            'params' => json_encode((new filter(courseid: $courseid))->to_array()),
             'status' => $status,
             'progress' => 0,
             'total' => 1,
@@ -172,11 +173,13 @@ final class zip_tasks_test extends \advanced_testcase {
      * over; a ready row's archive comes from its own task directory.
      */
     public function test_status_and_download_are_for_the_owner_only(): void {
+        $course = $this->getDataGenerator()->create_course();
         $owner = (int) $this->getDataGenerator()->create_user()->id;
+        $this->getDataGenerator()->enrol_user($owner, $course->id, 'editingteacher');
         $other = (int) $this->getDataGenerator()->create_user()->id;
-        $ready = $this->add_task($owner, zip_tasks::STATUS_READY);
+        $ready = $this->add_task($owner, zip_tasks::STATUS_READY, (int) $course->id);
         file_put_contents(task_storage::get_zip_path($ready), 'zip');
-        $pending = $this->add_task($owner, zip_tasks::STATUS_PENDING);
+        $pending = $this->add_task($owner, zip_tasks::STATUS_PENDING, (int) $course->id);
 
         $this->assertSame('accessdenied', $this->error_of(fn() => zip_tasks::get_status($ready, $other)));
         $this->assertSame('accessdenied', $this->error_of(fn() => zip_tasks::prepare_download($ready, $other)));
@@ -185,10 +188,40 @@ final class zip_tasks_test extends \advanced_testcase {
 
         [$zippath, $filename] = zip_tasks::prepare_download($ready, $owner);
         $this->assertSame(task_storage::get_zip_path($ready), $zippath);
-        $this->assertSame('certificates_course_5.zip', $filename);
+        $this->assertSame('certificates_course_' . $course->id . '.zip', $filename);
         $status = zip_tasks::get_status($ready, $owner);
         $this->assertSame(zip_tasks::STATUS_READY, $status['status']);
         $this->assertStringContainsString('taskid=' . $ready, $status['download_url']);
+    }
+
+    /**
+     * A ready archive is handed over only while its owner may still download it: a teacher who lost
+     * `:downloadcourse` after the build is refused; with the capability the archive is handed over.
+     */
+    public function test_download_is_refused_to_an_owner_who_lost_access(): void {
+        global $DB;
+
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $teacher = (int) $gen->create_user()->id;
+        $gen->enrol_user($teacher, $course->id, 'editingteacher');
+        $ready = $this->add_task($teacher, zip_tasks::STATUS_READY, (int) $course->id);
+        file_put_contents(task_storage::get_zip_path($ready), 'zip');
+
+        [$zippath] = zip_tasks::prepare_download($ready, $teacher);
+        $this->assertSame(task_storage::get_zip_path($ready), $zippath);
+
+        assign_capability(
+            'block/download_certificates:downloadcourse',
+            CAP_PROHIBIT,
+            (int) $DB->get_field('role', 'id', ['shortname' => 'editingteacher']),
+            \context_course::instance($course->id)->id,
+            true
+        );
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $this->assertSame('accessdenied', $this->error_of(fn() => zip_tasks::prepare_download($ready, $teacher)));
+        $this->assertFileExists($zippath);
     }
 
     /**

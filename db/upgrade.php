@@ -37,7 +37,7 @@
  * @return bool True on success.
  */
 function xmldb_block_download_certificates_upgrade($oldversion) {
-    global $DB;
+    global $CFG, $DB;
 
     $dbman = $DB->get_manager();
 
@@ -67,6 +67,11 @@ function xmldb_block_download_certificates_upgrade($oldversion) {
         // Upstream's installer added a dashboard block under the truncated name download_certificat,
         // with no block context; core never renders such a row.
         $DB->delete_records('block_instances', ['blockname' => 'download_certificat']);
+
+        // Upstream kept ZIPs of other users' certificates in this directory and never cleaned it up.
+        if (is_dir($CFG->tempdir . '/block_download_certificates/async')) {
+            remove_dir(make_temp_directory('block_download_certificates/async'));
+        }
 
         upgrade_block_savepoint(true, 2026100500, 'download_certificates');
     }

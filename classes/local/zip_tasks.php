@@ -193,8 +193,9 @@ final class zip_tasks {
      * @param int $userid The user asking.
      * @return array [string $zippath, string $filename]: the archive inside the row's own task
      *         directory, and its download name.
-     * @throws \moodle_exception As {@see self::get_owned()}, `tasknotready`, or `filenotfound`
-     *         (the row is then expired).
+     * @throws \moodle_exception As {@see self::get_owned()}, `tasknotready`, `filenotfound`
+     *         (the row is then expired), or `accessdenied` when the owner's scope no longer allows
+     *         the request.
      */
     public static function prepare_download(int $taskid, int $userid): array {
         $task = self::get_owned($taskid, $userid);
@@ -209,7 +210,46 @@ final class zip_tasks {
         }
         $params = json_decode((string) $task->params, true);
         $filter = filter::from_array(is_array($params) ? $params : []);
+
+        // The archive was authorised when it was built: check the owner against what they may do now.
+        try {
+            request::check_zip(scope::for_user((int) $task->userid), (string) $task->type, $filter);
+        } catch (\moodle_exception $e) {
+            if ($e->errorcode !== 'accessdenied') {
+                throw $e;
+            }
+            throw new \moodle_exception('accessdenied', 'block_download_certificates');
+        }
         return [$zippath, request::zip_filename((string) $task->type, $filter)];
+    }
+
+    /**
+     * Update a row only while it has the status the caller expects.
+     *
+     * The status check and the write are one statement, so a row that the cleanup failed meanwhile
+     * is never moved on by a task that read it earlier.
+     *
+     * @param int $taskid The row id.
+     * @param string $expected The status the row must still have.
+     * @param array $fields Column => value; the column names come from the caller's code, never
+     *        from input. A `status` entry is the status the row moves to.
+     * @return bool Whether the row has the wanted status afterwards (the new one, or `$expected`
+     *         when the write keeps it).
+     */
+    public static function update_if_status(int $taskid, string $expected, array $fields): bool {
+        global $DB;
+
+        $sets = [];
+        $params = ['bdcid' => $taskid, 'bdcexpected' => $expected];
+        foreach ($fields as $column => $value) {
+            $sets[] = "{$column} = :bdcf_{$column}";
+            $params['bdcf_' . $column] = $value;
+        }
+        $DB->execute(
+            'UPDATE {' . self::TABLE . '} SET ' . implode(', ', $sets) . ' WHERE id = :bdcid AND status = :bdcexpected',
+            $params
+        );
+        return $DB->get_field(self::TABLE, 'status', ['id' => $taskid]) === (string) ($fields['status'] ?? $expected);
     }
 
     /**

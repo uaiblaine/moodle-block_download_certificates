@@ -125,4 +125,5 @@ $string['type'] = 'Type';
 $string['unknown'] = 'Inconnu';
 $string['user_download_help'] = 'Sélectionnez un utilisateur pour télécharger tous ses certificats sous forme de fichier ZIP.';
 $string['zip_error_line'] = 'Certificat {$a->type} {$a->issueid} : {$a->reason}';
+$string['zip_error_outofscope'] = 'n\'est plus accessible au compte qui a demandé le téléchargement';
 $string['zip_error_unexpected'] = 'erreur inattendue lors de l\'ajout du certificat';
