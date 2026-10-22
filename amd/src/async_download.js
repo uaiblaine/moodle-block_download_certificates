@@ -1,691 +1,719 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 /**
- * Async download module for block_download_certificates.
+ * Background ZIP downloads: a ZIP form whose selection exceeds its threshold is queued as a task
+ * instead of posted, its progress shown in a dialogue and, once the dialogue is closed or the page
+ * revisited, in a banner; the ready archive is asked for by a POST into a hidden frame.
  *
- * Intercepts batch download form submissions when certificate count >= threshold,
- * creates an async task, and displays progress via polling.
- *
- * Features:
- * - Modal progress dialog on initial download launch
- * - Persistent top-of-page banner when modal is closed or on page revisit
- * - Continuous polling until task completes, regardless of modal state
+ * The forms are marked with `data-async-threshold`, on the form itself or on an element inside it,
+ * beside `data-download-type` and `data-cert-count`. A form with `data-confirm` asks that question
+ * first.
  *
  * @module     block_download_certificates/async_download
- * @package    block_download_certificates
- * @copyright  2025 E-learning Touch'
+ * @copyright  2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery'], function ($) {
 
-    /** @const {number} Minimum certificates to trigger async mode */
-    var ASYNC_THRESHOLD = 30;
+import Ajax from 'core/ajax';
+import Config from 'core/config';
+import Modal from 'core/modal';
+import ModalEvents from 'core/modal_events';
+import Notification from 'core/notification';
+import Templates from 'core/templates';
+import {getStrings} from 'core/str';
 
-    /** @const {number} Polling interval in milliseconds */
-    var POLL_INTERVAL = 3000;
+const COMPONENT = 'block_download_certificates';
+const TEMPLATE = 'block_download_certificates/task_progress';
+const FRAME = 'block-download-certificates-frame';
 
-    /** @var {number|null} Current polling timer */
-    var pollTimer = null;
+/** @type {string} The class of the progress dialogue, which the stylesheet's tokens are declared on. */
+const MODAL_CLASS = 'block-download-certificates-modal';
 
-    /** @var {string} Base URL for AJAX calls */
-    var ajaxBase = M.cfg.wwwroot + '/blocks/download_certificates/ajax/';
+/** @type {string} The root of the plugin's pages, where a banner goes first. */
+const PAGE_SELECTOR = '.block-download-certificates-page';
 
-    /** @var {Object|null} Current active task state tracked for banner updates */
-    var activeTask = null;
+/** @type {number} Milliseconds between two status requests. */
+const POLL_DELAY = 3000;
 
-    // =========================================================================
-    // Persistance des banners fermés (localStorage)
-    // =========================================================================
+/** @type {number} Milliseconds: the longest wait between two status requests after failures. */
+const MAX_DELAY = 30000;
 
-    /** @const {string} Clé localStorage pour les IDs de tâches fermées */
-    var DISMISSED_STORAGE_KEY = 'dc_dismissed_ready_tasks';
+/** @type {number} Failed status requests in a row after which polling stops. */
+const MAX_FAILURES = 5;
 
-    /**
-     * Retourne la liste des IDs de tâches "ready" fermées par l'utilisateur.
-     *
-     * @return {Array<number>}
-     */
-    function getDismissedTasks() {
-        try {
-            return JSON.parse(localStorage.getItem(DISMISSED_STORAGE_KEY) || '[]');
-        } catch (e) {
-            return [];
-        }
+/** @type {number} Status requests after which polling stops: an hour at the normal pace. */
+const MAX_POLLS = 1200;
+
+/** @type {number} Status requests after a download was posted, while the task is still ready. */
+const FOLLOW_ATTEMPTS = 5;
+
+/** @type {number} Dismissed tasks remembered per user. */
+const MAX_DISMISSED = 50;
+
+/** @type {string[]} The states after which nothing changes any more. */
+const FINISHED = ['ready', 'failed', 'expired', 'stopped'];
+
+/** @type {string[]} The finished states that are failures. */
+const FAILURES = ['failed', 'expired', 'stopped'];
+
+/** @type {Object} Web service argument => form field name; the integer ones are parsed. */
+const FIELDS = {
+    courseid: 'courseid',
+    groupid: 'groupid',
+    userid: 'userid',
+    cohortid: 'cohortid',
+    startdate: 'start_date',
+    enddate: 'end_date',
+};
+
+/** @type {string[]} The integer arguments of FIELDS. */
+const INTEGER_FIELDS = ['courseid', 'groupid', 'userid', 'cohortid'];
+
+/** @type {Object} Label name => string identifier: every string the module writes itself. */
+const STRINGS = {
+    title: 'async_generating',
+    preparing: 'async_preparing',
+    processing: 'async_processing',
+    ready: 'async_ready',
+    expired: 'async_expired',
+    stopped: 'async_polling_stopped',
+    failed: 'requestfailed',
+    readyany: 'async_zip_ready',
+    readyall: 'async_zip_ready_label_all',
+    readycourse: 'async_zip_ready_label_course',
+    readyuser: 'async_zip_ready_label_user',
+    readycohort: 'async_zip_ready_label_cohort',
+    readyrange: 'async_zip_ready_label_range',
+};
+
+/** @type {Object} Label name => core string identifier. */
+const CORE_STRINGS = {
+    confirm: 'confirm',
+    download: 'download',
+};
+
+/** @type {Object} Request type => the label of its ready archive. */
+const READY_LABELS = {
+    all: 'readyall',
+    course: 'readycourse',
+    user: 'readyuser',
+    cohort: 'readycohort',
+    range: 'readyrange',
+};
+
+/** @type {Object} The labels, loaded once by init(). */
+const strings = {};
+
+/** @type {WeakMap} Rendered progress root => its task. */
+const views = new WeakMap();
+
+/** @type {number} The current user, part of the storage key. */
+let userid = 0;
+
+/** @type {boolean} Whether init() ran: the block and the page may both ask for the module. */
+let initialised = false;
+
+/**
+ * The storage key of the user's dismissed banners.
+ *
+ * @returns {string}
+ */
+const storageKey = () => `${COMPONENT}_dismissed_${userid}`;
+
+/**
+ * The ids of the tasks whose ready banner the user dismissed; empty when storage is unavailable.
+ *
+ * @returns {number[]}
+ */
+const getDismissed = () => {
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(storageKey()) || '[]');
+        return Array.isArray(stored) ? stored : [];
+    } catch (error) {
+        return [];
     }
+};
 
-    /**
-     * Mémorise un ID de tâche comme fermé pour ne plus l'afficher.
-     *
-     * @param {number} taskid
-     */
-    function dismissTask(taskid) {
-        var dismissed = getDismissedTasks();
-        if (dismissed.indexOf(taskid) === -1) {
-            dismissed.push(taskid);
-            // Garder seulement les 50 derniers pour ne pas surcharger le localStorage.
-            if (dismissed.length > 50) {
-                dismissed = dismissed.slice(-50);
-            }
-            localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(dismissed));
-        }
+/**
+ * Remember that the user dismissed a task's ready banner.
+ *
+ * @param {number} taskid The task.
+ */
+const rememberDismissed = (taskid) => {
+    const dismissed = getDismissed().filter((id) => id !== taskid);
+    dismissed.push(taskid);
+    try {
+        window.localStorage.setItem(storageKey(), JSON.stringify(dismissed.slice(-MAX_DISMISSED)));
+    } catch (error) {
+        // Private browsing or a full store: the banner comes back on the next visit.
     }
-
-    /**
-     * Vérifie si une tâche a déjà été fermée par l'utilisateur.
-     *
-     * @param {number} taskid
-     * @return {boolean}
-     */
-    function isTaskDismissed(taskid) {
-        return getDismissedTasks().indexOf(taskid) !== -1;
-    }
-
-    /**
-     * Initialize the async download module.
-     *
-     * @param {Object} config Configuration from PHP
-     * @param {string} config.sesskey Session key
-     * @param {Array} config.pending_tasks Any pending/ready tasks for this user
-     */
-    function init(config) {
-        var sesskey = config.sesskey || M.cfg.sesskey;
-
-        // Bind select change events to update cert counts.
-        bindSelectUpdates();
-
-        // Intercept form submissions.
-        interceptForms(sesskey);
-
-        // Intercept "Download All" button.
-        interceptDownloadAll(sesskey);
-
-        // Check for existing tasks — show banner (not modal) on page revisit.
-        if (config.pending_tasks && config.pending_tasks.length > 0) {
-            config.pending_tasks.forEach(function (task) {
-                if (task.status === 'ready') {
-                    // Ne pas ré-afficher les banners que l'utilisateur a explicitement fermés.
-                    if (!isTaskDismissed(task.taskid)) {
-                        showReadyBanner(task);
-                    }
-                } else if (task.status === 'pending' || task.status === 'processing') {
-                    // On page revisit: show banner, NOT modal.
-                    activeTask = {
-                        taskid: task.taskid,
-                        progress: task.progress || 0,
-                        total: task.total || 0,
-                        status: task.status
-                    };
-                    showProgressBanner(activeTask);
-                    startPolling(task.taskid, sesskey);
-                }
-            });
-        }
-    }
-
-    /**
-     * Bind change events on select elements to dynamically update data-cert-count.
-     */
-    function bindSelectUpdates() {
-        var forms = document.querySelectorAll('form[data-download-type]');
-        forms.forEach(function (form) {
-            var select = form.querySelector('select');
-            if (select) {
-                select.addEventListener('change', function () {
-                    var selectedOption = select.options[select.selectedIndex];
-                    var count = selectedOption ? (parseInt(selectedOption.getAttribute('data-count'), 10) || 0) : 0;
-                    form.setAttribute('data-cert-count', count);
-                });
-            }
-        });
-    }
-
-    /**
-     * Intercept form submissions for batch downloads.
-     *
-     * @param {string} sesskey Session key
-     */
-    function interceptForms(sesskey) {
-        var forms = document.querySelectorAll('form[data-cert-count]');
-        forms.forEach(function (form) {
-            form.addEventListener('submit', function (e) {
-                var certCount = parseInt(form.getAttribute('data-cert-count'), 10);
-                if (certCount >= ASYNC_THRESHOLD) {
-                    e.preventDefault();
-                    var type = form.getAttribute('data-download-type');
-                    var params = form.getAttribute('data-download-params');
-                    try {
-                        params = JSON.parse(params);
-                    } catch (ex) {
-                        params = {};
-                    }
-                    // Also grab form field values.
-                    if (type === 'course') {
-                        var courseSelect = form.querySelector('[name="courseid"]');
-                        if (courseSelect) {
-                            params.courseid = parseInt(courseSelect.value, 10);
-                        }
-                    } else if (type === 'user') {
-                        var userSelect = form.querySelector('[name="userid"]');
-                        if (userSelect) {
-                            params.userid = parseInt(userSelect.value, 10);
-                        }
-                    } else if (type === 'cohort') {
-                        var cohortSelect = form.querySelector('[name="cohortid"]');
-                        if (cohortSelect) {
-                            params.cohortid = parseInt(cohortSelect.value, 10);
-                        }
-                    } else if (type === 'range') {
-                        var startDate = form.querySelector('[name="start_date"]');
-                        var endDate = form.querySelector('[name="end_date"]');
-                        if (startDate && endDate) {
-                            params.startdate = Math.floor(new Date(startDate.value).getTime() / 1000);
-                            params.enddate = Math.floor(new Date(endDate.value).getTime() / 1000) + 86399;
-                        }
-                    }
-                    createAsyncTask(type, params, sesskey);
-                }
-                // If below threshold, let the form submit normally.
-            });
-        });
-    }
-
-    /**
-     * Intercept the "Download All" button.
-     *
-     * @param {string} sesskey Session key
-     */
-    function interceptDownloadAll(sesskey) {
-        var downloadAllBtns = document.querySelectorAll('[data-download-all]');
-        if (!downloadAllBtns.length) {
-            return;
-        }
-
-        downloadAllBtns.forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                createAsyncTask('all', {}, sesskey);
-            });
-        });
-    }
-
-    /**
-     * Create an async download task via AJAX.
-     *
-     * @param {string} type Download type
-     * @param {Object} params Download parameters
-     * @param {string} sesskey Session key
-     */
-    function createAsyncTask(type, params, sesskey) {
-        showProgressModal(null, 0, sesskey);
-
-        $.ajax({
-            url: ajaxBase + 'create_task.php',
-            method: 'POST',
-            data: {
-                type: type,
-                params: JSON.stringify(params),
-                sesskey: sesskey,
-            },
-            dataType: 'json',
-            success: function (response) {
-                if (response.success) {
-                    activeTask = {
-                        taskid: response.taskid,
-                        progress: 0,
-                        total: response.total,
-                        status: 'pending'
-                    };
-                    updateProgressModal(response.taskid, 0, response.total, 'pending');
-                    startPolling(response.taskid, sesskey);
-                } else {
-                    showError(response.error || 'Unknown error');
-                }
-            },
-            error: function () {
-                showError('Network error. Please try again.');
-            }
-        });
-    }
-
-    /**
-     * Start polling for task status.
-     *
-     * @param {number} taskid Task ID
-     * @param {string} sesskey Session key
-     */
-    function startPolling(taskid, sesskey) {
-        stopPolling();
-        pollTimer = setInterval(function () {
-            $.ajax({
-                url: ajaxBase + 'task_status.php',
-                method: 'GET',
-                data: { taskid: taskid },
-                dataType: 'json',
-                success: function (response) {
-                    if (!response.success) {
-                        stopPolling();
-                        showError(response.error || 'Status check failed');
-                        return;
-                    }
-
-                    // Update active task state.
-                    if (activeTask) {
-                        activeTask.progress = response.progress;
-                        activeTask.total = response.total;
-                        activeTask.status = response.status;
-                    }
-
-                    // Update modal if visible.
-                    updateProgressModal(taskid, response.progress, response.total, response.status);
-
-                    // Always update banner if visible.
-                    updateProgressBanner(response.progress, response.total, response.status);
-
-                    if (response.status === 'ready') {
-                        stopPolling();
-                        triggerDownload(response.download_url);
-                        // Show completion in banner.
-                        showReadyInBanner(response.download_url, response.total);
-                    } else if (response.status === 'failed') {
-                        stopPolling();
-                        showError(response.error_message || 'Task failed');
-                        showErrorInBanner(response.error_message || 'Task failed');
-                    } else if (response.status === 'expired') {
-                        stopPolling();
-                        showError('Download has expired.');
-                        showErrorInBanner('Download has expired.');
-                    }
-                },
-                error: function () {
-                    // Keep polling on network errors, will retry.
-                }
-            });
-        }, POLL_INTERVAL);
-    }
-
-    /**
-     * Stop polling.
-     */
-    function stopPolling() {
-        if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-        }
-    }
-
-    // =========================================================================
-    // Progress Banner (persistent, top of page)
-    // =========================================================================
-
-    /**
-     * Show a persistent progress banner at the top of the page.
-     *
-     * @param {Object} task Task data {taskid, progress, total, status}
-     */
-    function showProgressBanner(task) {
-        // Remove existing banner if any.
-        var existing = document.getElementById('async-progress-banner');
-        if (existing) {
-            existing.remove();
-        }
-
-        var percent = task.total > 0 ? Math.round((task.progress / task.total) * 100) : 0;
-
-        var bannerHtml =
-            '<div id="async-progress-banner" class="async-progress-banner">' +
-            '<div class="d-flex align-items-center">' +
-            '<i class="fa fa-cog fa-spin mr-2" id="banner-spinner"></i>' +
-            '<span class="mr-3" id="banner-status-text">' +
-            M.util.get_string('async_generating', 'block_download_certificates') +
-            '</span>' +
-            '<div class="progress flex-grow-1 mr-3" style="height: 20px; min-width: 200px;">' +
-            '<div id="banner-progress-bar" ' +
-            'class="progress-bar progress-bar-striped progress-bar-animated bg-primary" ' +
-            'role="progressbar" style="width: ' + percent + '%;" ' +
-            'aria-valuenow="' + percent + '" aria-valuemin="0" aria-valuemax="100">' +
-            percent + '%' +
-            '</div>' +
-            '</div>' +
-            '<span class="text-muted small" id="banner-progress-detail">' +
-            task.progress + ' / ' + task.total +
-            '</span>' +
-            '</div>' +
-            '</div>';
-
-        var mainBlock = document.querySelector('.block-download-certificat-main')
-            || document.getElementById('page-content')
-            || document.body;
-        mainBlock.insertAdjacentHTML('afterbegin', bannerHtml);
-    }
-
-    /**
-     * Update the progress banner with new values.
-     *
-     * @param {number} progress Current progress
-     * @param {number} total Total certificates
-     * @param {string} status Current status
-     */
-    function updateProgressBanner(progress, total, status) {
-        var bar = document.getElementById('banner-progress-bar');
-        var detail = document.getElementById('banner-progress-detail');
-        var statusText = document.getElementById('banner-status-text');
-        var spinner = document.getElementById('banner-spinner');
-
-        if (!bar) {
-            return;
-        }
-
-        var percent = total > 0 ? Math.round((progress / total) * 100) : 0;
-
-        bar.style.width = percent + '%';
-        bar.setAttribute('aria-valuenow', percent);
-        bar.textContent = percent + '%';
-
-        if (detail) {
-            detail.textContent = progress + ' / ' + total;
-        }
-
-        if (statusText && status === 'processing') {
-            statusText.textContent = M.util.get_string('async_processing', 'block_download_certificates');
-        }
-
-        if (spinner && status === 'processing') {
-            spinner.className = 'fa fa-cog fa-spin mr-2';
-        }
-    }
-
-    /**
-     * Transform the progress banner into a success/ready state.
-     *
-     * @param {string} downloadUrl URL to download the ZIP
-     * @param {number} total Total certificates
-     */
-    function showReadyInBanner(downloadUrl, total) {
-        var banner = document.getElementById('async-progress-banner');
-        if (!banner) {
-            return;
-        }
-
-        banner.className = 'async-progress-banner async-progress-banner-success';
-        banner.innerHTML =
-            '<div class="d-flex align-items-center justify-content-between">' +
-            '<div>' +
-            '<i class="fa fa-check-circle text-success mr-2"></i>' +
-            '<strong>' + M.util.get_string('async_ready', 'block_download_certificates') + '</strong>' +
-            ' <span class="text-muted">(' + total + ' ' +
-            M.util.get_string('certificates', 'block_download_certificates') + ')</span>' +
-            '</div>' +
-            '<div>' +
-            '<a href="' + downloadUrl + '" class="btn btn-sm btn-success mr-2">' +
-            '<i class="fa fa-download mr-1"></i>' +
-            M.util.get_string('async_download', 'block_download_certificates') +
-            '</a>' +
-            '<button type="button" class="btn btn-sm btn-outline-secondary" id="banner-dismiss">' +
-            '<i class="fa fa-times"></i>' +
-            '</button>' +
-            '</div>' +
-            '</div>';
-
-        var dismissBtn = document.getElementById('banner-dismiss');
-        if (dismissBtn) {
-            dismissBtn.addEventListener('click', function () {
-                banner.remove();
-            });
-        }
-    }
-
-    /**
-     * Show error state in the banner.
-     *
-     * @param {string} message Error message
-     */
-    function showErrorInBanner(message) {
-        var banner = document.getElementById('async-progress-banner');
-        if (!banner) {
-            return;
-        }
-
-        banner.className = 'async-progress-banner async-progress-banner-error';
-        banner.innerHTML =
-            '<div class="d-flex align-items-center justify-content-between">' +
-            '<div>' +
-            '<i class="fa fa-exclamation-triangle text-danger mr-2"></i>' +
-            '<span class="text-danger">' + message + '</span>' +
-            '</div>' +
-            '<button type="button" class="btn btn-sm btn-outline-secondary" id="banner-dismiss-error">' +
-            '<i class="fa fa-times"></i>' +
-            '</button>' +
-            '</div>';
-
-        var dismissBtn = document.getElementById('banner-dismiss-error');
-        if (dismissBtn) {
-            dismissBtn.addEventListener('click', function () {
-                banner.remove();
-            });
-        }
-    }
-
-    // =========================================================================
-    // Progress Modal (initial launch only)
-    // =========================================================================
-
-    /**
-     * Show/create the progress modal.
-     *
-     * @param {number|null} taskid Task ID
-     * @param {number} total Total certificates
-     * @param {string} sesskey Session key
-     */
-    function showProgressModal(taskid, total, sesskey) {
-        // Remove existing modal if any.
-        var existing = document.getElementById('async-download-modal');
-        if (existing) {
-            existing.remove();
-        }
-
-        var modalHtml = '<div id="async-download-modal" class="modal fade show" style="display:block;" tabindex="-1">' +
-            '<div class="modal-dialog modal-dialog-centered">' +
-            '<div class="modal-content">' +
-            '<div class="modal-header bg-primary text-white" style="justify-content: space-between;">' +
-            '<h5 class="modal-title"><i class="fa fa-download"></i> ' +
-            M.util.get_string('async_generating', 'block_download_certificates') + '</h5>' +
-            '<button type="button" class="cert-close-btn" id="async-close-btn" aria-label="Close">' +
-            '<span aria-hidden="true">&times;</span></button > ' +
-            '</div>' +
-            '<div class="modal-body text-center">' +
-            '<div id="async-status-text" class="mb-3">' +
-            '<i class="fa fa-spinner fa-spin fa-2x"></i>' +
-            '<p class="mt-2">' + M.util.get_string('async_preparing', 'block_download_certificates') + '</p>' +
-            '</div>' +
-            '<div class="progress" style="height: 25px;">' +
-            '<div id="async-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" ' + ' role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>' +
-            '</div>' +
-            '<p id="async-progress-detail" class="text-muted mt-2 small">0 / ' + total + '</p>' +
-            '<div class="alert alert-info mt-3 small" id="async-info-message">' +
-            '<i class="fa fa-info-circle"></i> ' +
-            M.util.get_string('async_can_close', 'block_download_certificates') +
-            '</div>' +
-            '</div>' +
-            '</div></div></div>';
-
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-        var closeBtn = document.getElementById('async-close-btn');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', function () {
-                hideProgressModal();
-            });
-        }
-    }
-
-    /**
-     * Update the progress modal.
-     *
-     * @param {number} taskid Task ID
-     * @param {number} progress Current progress
-     * @param {number} total Total certificates
-     * @param {string} status Current status
-     */
-    function updateProgressModal(taskid, progress, total, status) {
-        var progressBar = document.getElementById('async-progress-bar');
-        var progressDetail = document.getElementById('async-progress-detail');
-        var statusText = document.getElementById('async-status-text');
-        var infoMessage = document.getElementById('async-info-message');
-
-        if (!progressBar) {
-            return;
-        }
-
-        var percent = total > 0 ? Math.round((progress / total) * 100) : 0;
-
-        progressBar.style.width = percent + '%';
-        progressBar.setAttribute('aria-valuenow', percent);
-        progressBar.textContent = percent + '%';
-
-        if (progressDetail) {
-            progressDetail.textContent = progress + ' / ' + total;
-        }
-
-        if (statusText) {
-            if (status === 'processing') {
-                statusText.innerHTML = '<i class="fa fa-cog fa-spin fa-2x"></i>' +
-                    '<p class="mt-2">' + M.util.get_string('async_processing', 'block_download_certificates') + '</p>';
-            } else if (status === 'ready') {
-                statusText.innerHTML = '<i class="fa fa-check-circle fa-2x text-success"></i>' +
-                    '<p class="mt-2">' + M.util.get_string('async_ready', 'block_download_certificates') + '</p>';
-                progressBar.classList.remove('progress-bar-animated', 'bg-primary');
-                progressBar.classList.add('bg-success');
-
-                // Hide the info message when ready.
-                if (infoMessage) {
-                    infoMessage.style.display = 'none';
-                }
-
-                // Auto-close modal after 3 seconds (banner stays visible).
-                setTimeout(function () {
-                    hideProgressModal();
-                }, 3000);
-            }
-        }
-    }
-
-    /**
-     * Hide and remove the progress modal. Shows progress banner if task is still active.
-     * Supprime aussi tous les backdrops résiduels générés par Bootstrap/Moodle.
-     */
-    function hideProgressModal() {
-        var modal = document.getElementById('async-download-modal');
-        if (modal) {
-            modal.remove();
-        }
-
-        // Supprimer tous les backdrops (le nôtre + celui généré automatiquement par Bootstrap).
-        document.querySelectorAll('.modal-backdrop').forEach(function (bd) {
-            bd.remove();
-        });
-
-        // S'assurer que le body n'est plus verrouillé par le modal.
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-
-        // If there's an active task still in progress, show the banner.
-        if (activeTask && (activeTask.status === 'pending' || activeTask.status === 'processing')) {
-            showProgressBanner(activeTask);
-        }
-    }
-
-    /**
-     * Show an error in the modal.
-     *
-     * @param {string} message Error message
-     */
-    function showError(message) {
-        var statusText = document.getElementById('async-status-text');
-        var progressBar = document.getElementById('async-progress-bar');
-
-        if (statusText) {
-            statusText.innerHTML = '<i class="fa fa-exclamation-triangle fa-2x text-danger"></i>' +
-                '<p class="mt-2 text-danger">' + message + '</p>';
-        }
-
-        if (progressBar) {
-            progressBar.classList.remove('progress-bar-animated', 'bg-primary');
-            progressBar.classList.add('bg-danger');
-        }
-
-        // Show close button.
-        var closeBtn = document.getElementById('async-close-btn');
-        if (closeBtn) {
-            closeBtn.style.display = '';
-        }
-    }
-
-    /**
-     * Trigger file download.
-     *
-     * @param {string} url Download URL
-     */
-    function triggerDownload(url) {
-        var iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = url;
-        document.body.appendChild(iframe);
-
-        // Clean up iframe after 30 seconds.
-        setTimeout(function () {
-            if (iframe.parentNode) {
-                iframe.parentNode.removeChild(iframe);
-            }
-        }, 30000);
-    }
-
-    /**
-     * Show a "ZIP ready" banner at the top of the page.
-     *
-     * @param {Object} task Task data
-     */
-    function showReadyBanner(task) {
-        var downloadUrl = M.cfg.wwwroot + '/blocks/download_certificates/ajax/download_zip.php' +
-            '?taskid=' + task.taskid + '&sesskey=' + M.cfg.sesskey;
-
-        // Build a label describing the archive.
-        var typeLabel = task.type || 'all';
-        var label = M.util.get_string('async_zip_ready_label_' + typeLabel, 'block_download_certificates');
-        // Fallback if specific string not found.
-        if (!label || label.indexOf('[[') === 0) {
-            label = M.util.get_string('async_zip_ready', 'block_download_certificates');
-        }
-
-        var bannerId = 'async-ready-banner-' + task.taskid;
-        var bannerHtml = '<div id="' + bannerId + '" ' +
-            'class="alert alert-success alert-dismissible fade show mx-3 mt-2" role="alert">' +
-            '<i class="fa fa-check-circle"></i> ' +
-            label + ' (' + task.total + ' ' + M.util.get_string('certificates', 'block_download_certificates') + ')' +
-            ' <a href="' + downloadUrl + '" class="btn btn-sm btn-success ml-2">' +
-            '<i class="fa fa-download"></i> ' +
-            M.util.get_string('async_download', 'block_download_certificates') + '</a>' +
-            '<button type="button" class="cert-close-btn cert-close-btn-dark js-dismiss-ready-banner"' +
-            ' data-taskid="' + task.taskid + '"' +
-            ' data-dismiss="alert" data-bs-dismiss="alert" aria-label="Close">' +
-            '<span aria-hidden="true">&times;</span></button></div>';
-
-        var mainBlock = document.querySelector('.block-download-certificat-main')
-            || document.getElementById('page-content')
-            || document.body;
-        mainBlock.insertAdjacentHTML('afterbegin', bannerHtml);
-
-        // Mémoriser la fermeture dans localStorage pour ne pas ré-afficher au rechargement.
-        var bannerEl = document.getElementById(bannerId);
-        if (bannerEl) {
-            var closeBtn = bannerEl.querySelector('.js-dismiss-ready-banner');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', function () {
-                    dismissTask(parseInt(this.getAttribute('data-taskid'), 10));
-                });
-            }
-        }
-    }
-
-    return {
-        init: init
-    };
+};
+
+/**
+ * A task as the module tracks it.
+ *
+ * @param {Object} data taskid, type, status, progress, total.
+ * @returns {Object}
+ */
+const newTask = (data) => ({
+    taskid: data.taskid,
+    type: data.type,
+    status: data.status,
+    progress: data.progress || 0,
+    total: data.total || 0,
+    errormessage: '',
+    downloadurl: '',
+    downloaded: false,
+    autodownload: false,
+    autodownloaded: false,
+    roots: new Set(),
+    failures: 0,
+    polls: 0,
+    inflight: false,
+    rendering: 0,
 });
+
+/**
+ * The state of a task, in words.
+ *
+ * @param {Object} task The task.
+ * @returns {string}
+ */
+const messageFor = (task) => {
+    switch (task.status) {
+        case 'pending':
+            return strings.preparing;
+        case 'processing':
+            return strings.processing;
+        case 'ready':
+            if (task.autodownload) {
+                return strings.ready;
+            }
+            return strings[READY_LABELS[task.type]] || strings.readyany;
+        case 'failed':
+            return task.errormessage || strings.failed;
+        case 'expired':
+            return strings.expired;
+        case 'stopped':
+            return strings.stopped;
+        default:
+            return '';
+    }
+};
+
+/**
+ * The progress as a whole percentage.
+ *
+ * @param {Object} task The task.
+ * @returns {number}
+ */
+const percentOf = (task) => (task.total > 0 ? Math.round(task.progress * 100 / task.total) : 0);
+
+/**
+ * The template context of a task's progress.
+ *
+ * @param {Object} task The task.
+ * @param {boolean} banner Whether it is rendered as a banner.
+ * @returns {Object}
+ */
+const progressContext = (task, banner) => ({
+    taskid: task.taskid,
+    banner,
+    showhint: !banner,
+    message: messageFor(task),
+    percent: percentOf(task),
+    progress: task.progress,
+    total: task.total,
+    ready: task.status === 'ready' && !task.downloaded,
+});
+
+/**
+ * Bring one rendered progress up to date with its task.
+ *
+ * @param {HTMLElement} root The rendered progress.
+ * @param {Object} task The task.
+ */
+const paintRoot = (root, task) => {
+    const percent = percentOf(task);
+    const finished = FINISHED.includes(task.status);
+    const failed = FAILURES.includes(task.status);
+    const message = root.querySelector('[data-region="message"]');
+    const bar = root.querySelector('[data-region="bar"]');
+    const detail = root.querySelector('[data-region="detail"]');
+    const hint = root.querySelector('[data-region="hint"]');
+    const download = root.querySelector('[data-action="download"]');
+
+    message.textContent = messageFor(task);
+    message.classList.toggle('text-danger', failed);
+    bar.style.width = `${percent}%`;
+    bar.setAttribute('aria-valuenow', String(percent));
+    bar.textContent = `${percent}%`;
+    bar.classList.toggle('progress-bar-animated', !finished);
+    bar.classList.toggle('bg-success', task.status === 'ready');
+    bar.classList.toggle('bg-danger', failed);
+    detail.textContent = `${task.progress} / ${task.total}`;
+    if (hint) {
+        hint.hidden = finished;
+    }
+    download.hidden = task.status !== 'ready' || task.downloaded;
+};
+
+/**
+ * Bring every rendered progress of a task up to date.
+ *
+ * @param {Object} task The task.
+ */
+const paint = (task) => task.roots.forEach((root) => paintRoot(root, task));
+
+/**
+ * Render a task's progress and attach it to the task.
+ *
+ * @param {Object} task The task.
+ * @param {boolean} banner Whether it is rendered as a banner.
+ * @returns {Promise<Object>} html and js of the render.
+ */
+const renderProgress = (task, banner) => Templates.renderForPromise(TEMPLATE, progressContext(task, banner));
+
+/**
+ * Track a rendered progress root.
+ *
+ * @param {HTMLElement|undefined} root The root.
+ * @param {Object} task The task.
+ */
+const attach = (root, task) => {
+    if (!root) {
+        return;
+    }
+    views.set(root, task);
+    task.roots.add(root);
+    paintRoot(root, task);
+};
+
+/**
+ * Show a task's progress in a banner at the top of the page.
+ *
+ * @param {Object} task The task.
+ * @returns {Promise}
+ */
+const showBanner = async(task) => {
+    const container = document.querySelector(PAGE_SELECTOR)
+        || document.getElementById('region-main')
+        || document.body;
+    // Counted while it renders: a task whose dialogue closed has no root until the banner is attached,
+    // and poll() must not read that as a task nothing shows.
+    task.rendering += 1;
+    try {
+        const {html, js} = await renderProgress(task, true);
+        const nodes = Templates.prependNodeContents(container, html, js);
+        attach(nodes.find((node) => node.nodeType === Node.ELEMENT_NODE), task);
+    } finally {
+        task.rendering -= 1;
+    }
+};
+
+/**
+ * Show a task's progress in a dialogue; closing it before the end moves the progress to a banner.
+ *
+ * @param {Object} task The task.
+ * @returns {Promise}
+ */
+const showDialogue = async(task) => {
+    const {html} = await renderProgress(task, false);
+    const modal = await Modal.create({
+        title: strings.title,
+        body: html,
+        show: true,
+        removeOnClose: true,
+    });
+    modal.getRoot()[0].classList.add(MODAL_CLASS);
+    const root = modal.getBody()[0].querySelector('[data-region="task-progress"]');
+    attach(root, task);
+    modal.getRoot().on(ModalEvents.hidden, () => {
+        if (FINISHED.includes(task.status)) {
+            task.roots.delete(root);
+            return;
+        }
+        // The dialogue's root stays until the banner has its own, so the task is never without a root.
+        const release = () => task.roots.delete(root);
+        showBanner(task).then(() => {
+            release();
+            return null;
+        }).catch((error) => {
+            release();
+            Notification.exception(error);
+        });
+    });
+};
+
+/**
+ * Post for a ready archive into a hidden frame, so that the page stays.
+ *
+ * @param {Object} task The task.
+ */
+const download = (task) => {
+    let frame = document.getElementById(FRAME);
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.id = FRAME;
+        frame.name = FRAME;
+        frame.hidden = true;
+        document.body.append(frame);
+    }
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = task.downloadurl || `${Config.wwwroot}/blocks/download_certificates/ajax/download_zip.php`;
+    form.target = FRAME;
+    form.hidden = true;
+    [['taskid', task.taskid], ['sesskey', Config.sesskey]].forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = String(value);
+        form.append(input);
+    });
+    document.body.append(form);
+    form.submit();
+    setTimeout(() => form.remove(), POLL_DELAY);
+    // The archive is handed over once and the server expires the task when it claims it: the
+    // button stays until a status request reports that, and a frame that loads while the task is
+    // still ready means the server sent a page instead of the archive.
+    frame.addEventListener('load', () => onFrameLoad(task), {once: true});
+    followDownload(task, FOLLOW_ATTEMPTS);
+};
+
+/**
+ * Ask once for a task's status and take it in; a failure leaves the task as it was.
+ *
+ * @param {Object} task The task.
+ * @returns {Promise}
+ */
+const refresh = async(task) => {
+    try {
+        const status = await Ajax.call([{
+            methodname: 'block_download_certificates_get_task_status',
+            args: {taskid: task.taskid},
+        }])[0];
+        applyStatus(task, status);
+    } catch (error) {
+        // The next poll or a retry of the button asks again.
+    }
+};
+
+/**
+ * Ask for the status right after a download was posted, and again a few times while the task is
+ * still ready (the server may not have claimed it yet); the banner then shows it as handed over.
+ *
+ * @param {Object} task The task.
+ * @param {number} attempts Status requests left.
+ */
+const followDownload = (task, attempts) => {
+    refresh(task).then(() => {
+        if (task.status === 'ready' && attempts > 1) {
+            setTimeout(() => followDownload(task, attempts - 1), POLL_DELAY);
+        }
+        return null;
+    }).catch(Notification.exception);
+};
+
+/**
+ * The hidden frame loaded: an archive is a download, so this is a page, usually an error.
+ *
+ * @param {Object} task The task.
+ * @returns {Promise}
+ */
+const onFrameLoad = async(task) => {
+    await refresh(task);
+    if (task.status === 'ready') {
+        Notification.addNotification({message: strings.failed, type: 'error'});
+    }
+};
+
+/**
+ * Take in a status the web service returned.
+ *
+ * @param {Object} task The task.
+ * @param {Object} status The web service's result.
+ */
+const applyStatus = (task, status) => {
+    task.status = status.status;
+    task.progress = status.progress;
+    task.total = status.total;
+    task.errormessage = status.errormessage;
+    task.downloadurl = status.downloadurl;
+    task.downloaded = task.status === 'expired';
+    paint(task);
+    if (task.status === 'ready' && task.autodownload && !task.autodownloaded) {
+        task.autodownloaded = true;
+        download(task);
+    }
+};
+
+/**
+ * Ask for a task's status, then schedule the next request: one request in flight, a longer wait
+ * after each failure, and a stop after too many failures or requests.
+ *
+ * @param {Object} task The task.
+ * @returns {Promise}
+ */
+const poll = async(task) => {
+    if (task.inflight) {
+        // A request in flight schedules the next one itself.
+        return;
+    }
+    if (!task.roots.size) {
+        // A banner still rendering will show the task: keep the schedule. A task nothing shows any
+        // more is picked up again on the next visit.
+        if (task.rendering) {
+            setTimeout(() => poll(task), POLL_DELAY);
+        }
+        return;
+    }
+    task.inflight = true;
+    task.polls += 1;
+    let delay = POLL_DELAY;
+    try {
+        const status = await Ajax.call([{
+            methodname: 'block_download_certificates_get_task_status',
+            args: {taskid: task.taskid},
+        }])[0];
+        task.failures = 0;
+        applyStatus(task, status);
+    } catch (error) {
+        if (error && error.errorcode) {
+            // The server refused, as for a task that is gone: asking again changes nothing.
+            task.status = 'failed';
+            task.errormessage = error.message || '';
+            paint(task);
+        } else {
+            task.failures += 1;
+            delay = Math.min(POLL_DELAY * (2 ** task.failures), MAX_DELAY);
+        }
+    } finally {
+        task.inflight = false;
+    }
+    if (FINISHED.includes(task.status)) {
+        return;
+    }
+    if (task.failures >= MAX_FAILURES || task.polls >= MAX_POLLS) {
+        task.status = 'stopped';
+        paint(task);
+        return;
+    }
+    setTimeout(() => poll(task), delay);
+};
+
+/**
+ * Queue a ZIP request as a background task and follow it in a dialogue.
+ *
+ * @param {Object} args The create_task arguments.
+ * @returns {Promise}
+ */
+const queue = async(args) => {
+    const task = newTask({taskid: 0, type: args.type, status: 'pending'});
+    task.autodownload = true;
+    await showDialogue(task);
+    try {
+        const result = await Ajax.call([{
+            methodname: 'block_download_certificates_create_task',
+            args,
+        }])[0];
+        task.taskid = result.taskid;
+        task.total = result.total;
+        task.roots.forEach((root) => {
+            root.dataset.taskid = String(result.taskid);
+        });
+        paint(task);
+        setTimeout(() => poll(task), POLL_DELAY);
+    } catch (error) {
+        // The refusal is shown where the progress was, in the dialogue or the banner that replaced it.
+        task.status = 'failed';
+        task.errormessage = error && error.message ? error.message : '';
+        paint(task);
+    }
+};
+
+/**
+ * The element carrying a form's background download marks: the form, else the first marked element
+ * inside it.
+ *
+ * @param {HTMLFormElement} form The form.
+ * @returns {HTMLElement|null}
+ */
+const markerOf = (form) => (form.matches('[data-async-threshold]') ? form : form.querySelector('[data-async-threshold]'));
+
+/**
+ * The create_task arguments a form's fields carry.
+ *
+ * @param {HTMLFormElement} form The form.
+ * @param {string} type The request type.
+ * @returns {Object}
+ */
+const formArgs = (form, type) => {
+    const args = {type};
+    Object.entries(FIELDS).forEach(([arg, name]) => {
+        const field = form.elements.namedItem(name);
+        if (!field || !field.value) {
+            return;
+        }
+        args[arg] = INTEGER_FIELDS.includes(arg) ? (parseInt(field.value, 10) || 0) : field.value;
+    });
+    return args;
+};
+
+/**
+ * Ask a form's question in a core dialogue, then submit it again, answered.
+ *
+ * @param {HTMLFormElement} form The form.
+ * @param {HTMLElement|null} submitter The button that submitted it.
+ * @returns {Promise}
+ */
+const confirmThenSubmit = async(form, submitter) => {
+    try {
+        await Notification.saveCancelPromise(strings.confirm, form.dataset.confirm, strings.download, {
+            triggerElement: submitter,
+        });
+    } catch (error) {
+        // Cancelled: nothing is requested.
+        return;
+    }
+    form.dataset.confirmed = 'true';
+    if (submitter) {
+        form.requestSubmit(submitter);
+    } else {
+        form.requestSubmit();
+    }
+};
+
+/**
+ * Ask a form's confirmation first, then queue its request instead of posting it when it reaches the
+ * threshold.
+ *
+ * @param {Event} event The submit event.
+ */
+const onSubmit = (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) {
+        return;
+    }
+    if (form.dataset.confirmed === 'true') {
+        // Answered once for this submission: the next one asks again.
+        delete form.dataset.confirmed;
+    } else if (form.dataset.confirm) {
+        event.preventDefault();
+        confirmThenSubmit(form, event.submitter || null).catch(Notification.exception);
+        return;
+    }
+    const marker = markerOf(form);
+    if (!marker) {
+        return;
+    }
+    const threshold = parseInt(marker.dataset.asyncThreshold, 10) || 0;
+    const count = parseInt(marker.dataset.certCount, 10) || 0;
+    if (!threshold || count <= threshold) {
+        // At most the synchronous limit: the page builds it at once.
+        return;
+    }
+    event.preventDefault();
+    queue(formArgs(form, marker.dataset.downloadType)).catch(Notification.exception);
+};
+
+/**
+ * Keep a marked form's count in step with the option chosen in its menu.
+ *
+ * @param {Event} event The change event.
+ */
+const onChange = (event) => {
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement) || !select.form) {
+        return;
+    }
+    const marker = markerOf(select.form);
+    const option = select.selectedOptions[0];
+    // Only the main menu's options carry a count; a group narrows the course count, never widens it.
+    if (!marker || !option || option.dataset.count === undefined) {
+        return;
+    }
+    marker.dataset.certCount = option.dataset.count;
+};
+
+/**
+ * Handle the download and dismiss buttons of a rendered progress.
+ *
+ * @param {Event} event The click.
+ */
+const onClick = (event) => {
+    const button = event.target.closest('[data-region="task-progress"] [data-action]');
+    if (!button) {
+        return;
+    }
+    const root = button.closest('[data-region="task-progress"]');
+    const task = views.get(root);
+    if (!task) {
+        return;
+    }
+    if (button.dataset.action === 'download') {
+        download(task);
+    } else if (button.dataset.action === 'dismiss') {
+        task.roots.delete(root);
+        root.remove();
+        if (task.status === 'ready') {
+            rememberDismissed(task.taskid);
+        }
+    }
+};
+
+/**
+ * Start the module: listen to the marked forms and show the user's unfinished and ready tasks.
+ *
+ * @param {Object} config userid, and pendingtasks: taskid, type, status, progress, total of each.
+ * @returns {Promise}
+ */
+export const init = async(config) => {
+    if (initialised) {
+        return;
+    }
+    initialised = true;
+    userid = config.userid;
+    try {
+        const requests = [
+            ...Object.values(STRINGS).map((key) => ({key, component: COMPONENT})),
+            ...Object.values(CORE_STRINGS).map((key) => ({key, component: 'core'})),
+        ];
+        const values = await getStrings(requests);
+        [...Object.keys(STRINGS), ...Object.keys(CORE_STRINGS)].forEach((name, index) => {
+            strings[name] = values[index];
+        });
+    } catch (error) {
+        Notification.exception(error);
+        return;
+    }
+    document.addEventListener('submit', onSubmit);
+    document.addEventListener('change', onChange);
+    document.addEventListener('click', onClick);
+
+    const dismissed = getDismissed();
+    const pending = (config.pendingtasks || []).filter((data) => {
+        return data.status !== 'ready' || !dismissed.includes(data.taskid);
+    });
+    await Promise.all(pending.map(async(data) => {
+        const task = newTask(data);
+        await showBanner(task);
+        if (!FINISHED.includes(task.status)) {
+            setTimeout(() => poll(task), POLL_DELAY);
+        }
+    }));
+};

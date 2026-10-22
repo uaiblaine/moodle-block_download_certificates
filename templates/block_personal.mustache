@@ -1,0 +1,99 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_download_certificates/block_personal
+
+    One user's certificates in the block: the viewer's own (count and ZIP on site pages, a list on a
+    course page or their profile), or, on another user's profile, that user's certificates within
+    the viewer's scope.
+
+    Context variables required for this template:
+    * heading - The section heading, empty when no other section comes first.
+    * count - The certificates of the section.
+    * countlabel - What the count counts.
+    * hascertificates - Whether certificates are listed.
+    * certificates - The newest ones: name, course (may be empty), date, url (single download),
+      downloadlabel (the link's accessible name).
+    * more - How many are not listed, in words, or empty.
+    * zip - A block_download_certificates/zip_form context, or false.
+    * empty - The message when the count is 0, else empty.
+
+    Example context (json):
+    {
+        "heading": "",
+        "count": 7,
+        "countlabel": "My certificates",
+        "hascertificates": true,
+        "certificates": [
+            {
+                "name": "Certificate of completion",
+                "course": "Analytical engines",
+                "date": "20 October 2026",
+                "url": "https://example.com/blocks/download_certificates/download_precise.php?type=customcert&issueid=1",
+                "downloadlabel": "Download Certificate of completion"
+            }
+        ],
+        "more": "And 2 more",
+        "zip": {
+            "url": "https://example.com/blocks/download_certificates/download_user.php",
+            "type": "user",
+            "count": 7,
+            "threshold": 30,
+            "sesskey": "abc123",
+            "fields": [
+                {"name": "action", "value": "download_my_certificates"},
+                {"name": "userid", "value": "2"}
+            ],
+            "label": "Download My Certificates",
+            "buttonclass": "btn-primary btn-sm w-100",
+            "confirm": false
+        },
+        "empty": ""
+    }
+}}
+{{#heading}}
+<hr class="my-3">
+<h6 class="mb-2">{{heading}}</h6>
+{{/heading}}
+<div class="d-flex flex-column-reverse text-center mb-2">
+    <p class="small text-muted mb-0">{{countlabel}}</p>
+    <p class="h4 mb-0 block-download-certificates-number">{{count}}</p>
+</div>
+{{#hascertificates}}
+<ul class="list-unstyled mb-2 block-download-certificates-list">
+    {{#certificates}}
+    <li class="mb-2">
+        <a href="{{url}}" aria-label="{{downloadlabel}}">
+            <i class="fa fa-download me-1" aria-hidden="true"></i>{{name}}
+        </a>
+        {{#course}}
+        <span class="d-block small text-muted">{{course}}</span>
+        {{/course}}
+        <span class="d-block small text-muted">{{date}}</span>
+    </li>
+    {{/certificates}}
+</ul>
+{{#more}}
+<p class="small text-muted mb-2">{{more}}</p>
+{{/more}}
+{{/hascertificates}}
+{{#zip}}
+{{> block_download_certificates/zip_form}}
+{{/zip}}
+{{#empty}}
+<p class="alert alert-info text-center small mb-0">{{empty}}</p>
+{{/empty}}

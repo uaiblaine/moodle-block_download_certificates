@@ -18,81 +18,66 @@
  * Upgrade steps for block_download_certificates.
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
- * Execute block_download_certificates upgrade from the given old version.
+ * Upgrade the plugin.
  *
- * @param int $oldversion
- * @return bool
+ * Versions are numbered in the range of the Moodle version a branch targets (this branch, 5.2:
+ * 20260420XX), so a release for one Moodle version never carries the number of another. Upstream
+ * releases were numbered by date up to 2026100700, above that range: a site coming from upstream
+ * 1.6.1 sets its version to this branch's switch number, 2026041999 (README.md lists it), then
+ * upgrades. The first step below therefore reads the schema, not
+ * $oldversion, and brings any upstream schema to the current one.
+ *
+ * @param int $oldversion The currently installed plugin version.
+ * @return bool True on success.
  */
 function xmldb_block_download_certificates_upgrade($oldversion) {
-    global $DB;
+    global $CFG, $DB;
 
     $dbman = $DB->get_manager();
 
-    if ($oldversion < 2026022000) {
-        // Define table block_download_cert_tasks.
-        $table = new xmldb_table('block_download_cert_tasks');
+    if ($oldversion < 2026042000) {
+        $table = new xmldb_table('block_download_certificates_tasks');
+        $legacy = new xmldb_table('block_download_cert_tasks');
 
-        // Adding fields.
-        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
-        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('type', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('params', XMLDB_TYPE_TEXT, null, null, null, null, null);
-        $table->add_field('status', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'pending');
-        $table->add_field('progress', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('total', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('filepath', XMLDB_TYPE_CHAR, '255', null, null, null, null);
-        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('error', XMLDB_TYPE_TEXT, null, null, null, null, null);
-
-        // Adding keys.
-        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-        $table->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
-
-        // Adding indexes.
-        $table->add_index('status_idx', XMLDB_INDEX_NOTUNIQUE, ['status']);
-        $table->add_index('userid_status_idx', XMLDB_INDEX_NOTUNIQUE, ['userid', 'status']);
-
-        // Conditionally create the table.
+        // Upstream created the table as block_download_cert_tasks in version 2026022000 and renamed it
+        // in 2026100700; earlier versions had no table.
         if (!$dbman->table_exists($table)) {
-            $dbman->create_table($table);
+            if ($dbman->table_exists($legacy)) {
+                $dbman->rename_table($legacy, 'block_download_certificates_tasks');
+            } else {
+                $dbman->install_one_table_from_xmldb_file(
+                    __DIR__ . '/install.xml',
+                    'block_download_certificates_tasks'
+                );
+            }
         }
 
-        // Block savepoint reached.
-        upgrade_block_savepoint(true, 2026022000, 'download_certificates');
-    }
-
-    if ($oldversion < 2026030900) {
-        // Add batchoffset field for chunked processing.
-        $table = new xmldb_table('block_download_cert_tasks');
+        // Upstream added this field in version 2026030900.
         $field = new xmldb_field('batchoffset', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'error');
-
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
 
-        // Block savepoint reached.
-        upgrade_block_savepoint(true, 2026030900, 'download_certificates');
-    }
+        // Upstream's installer added a dashboard block under the truncated name download_certificat,
+        // with no block context; core never renders such a row.
+        $DB->delete_records('block_instances', ['blockname' => 'download_certificat']);
 
-    if ($oldversion < 2026100700) {
-        // Rename block_download_cert_tasks to block_download_certificates_tasks (frankenstyle table prefix).
-        $table = new xmldb_table('block_download_cert_tasks');
-
-        if ($dbman->table_exists($table) && !$dbman->table_exists('block_download_certificates_tasks')) {
-            $dbman->rename_table($table, 'block_download_certificates_tasks');
+        // Upstream kept every user's background ZIPs in this shared directory and left some behind (failed
+        // rows were deleted without their file); ZIPs now live under task_storage::BASEDIR.
+        if (is_dir($CFG->tempdir . '/block_download_certificates/async')) {
+            remove_dir(make_temp_directory('block_download_certificates/async'));
         }
 
-        // Block savepoint reached.
-        upgrade_block_savepoint(true, 2026100700, 'download_certificates');
+        // Upstream stored the archive path here; nothing reads it and this plugin no longer writes it.
+        $DB->set_field('block_download_certificates_tasks', 'filepath', null);
+
+        upgrade_block_savepoint(true, 2026042000, 'download_certificates');
     }
 
     return true;
