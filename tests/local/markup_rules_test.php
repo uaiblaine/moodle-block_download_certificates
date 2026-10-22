@@ -29,6 +29,7 @@ namespace block_download_certificates\local;
  * @category  test
  * @copyright 2026 Anderson Blaine
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @coversNothing
  */
 final class markup_rules_test extends \basic_testcase {
     /**
