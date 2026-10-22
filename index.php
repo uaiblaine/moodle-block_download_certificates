@@ -15,98 +15,47 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Main controller for block_download_certificates plugin.
+ * Manager page: every certificate on the site, its download tabs and table (needs `:manage`).
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/lib.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
+use block_download_certificates\local\bootstrap;
+use block_download_certificates\local\repository;
+use block_download_certificates\local\request;
+use block_download_certificates\local\scope;
+use block_download_certificates\local\zip_tasks;
+use block_download_certificates\output\panel_page;
 
-require_login();
+require_once(__DIR__ . '/../../config.php');
+
+require_login(null, false);
+request::reject_guest();
 
 $context = context_system::instance();
 require_capability('block/download_certificates:manage', $context);
+$scope = scope::for_user((int) $USER->id);
 
 $PAGE->set_context($context);
 $PAGE->set_url('/blocks/download_certificates/index.php');
 $PAGE->set_title(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_heading(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_pagelayout('admin');
+bootstrap::mark_page();
 
-// Initialize controller.
-$controller = new block_download_certificates_controller();
+$data = panel_page::manager($scope, new repository());
 
-// Get certificates data for display.
-$data = $controller->get_certificates_data();
-
-// Get courses with certificates for the dropdown.
-$courses = $controller->get_courses_with_certificates();
-$data['courses'] = $courses;
-$data['has_courses'] = !empty($courses);
-
-// Get users with certificates for the dropdown.
-$users = $controller->get_users_with_certificates();
-$data['users'] = $users;
-$data['has_users'] = !empty($users);
-$PAGE->requires->css('/blocks/download_certificates/styles.css');
-
-// Initialize certificate table JS module (dynamic AJAX table).
-$tableconfig = [
-    'sesskey' => sesskey(),
-    'total_count' => $data['total_count'],
-];
-$PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init', [$tableconfig]);
-
-// Initialize async download JS module.
-$jsconfig = [
-    'sesskey' => sesskey(),
-    'pending_tasks' => $data['pending_tasks'] ?? [],
-];
-$PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [$jsconfig]);
-
-// Strings for JS modules.
-$PAGE->requires->strings_for_js([
-    // Async download strings.
-    'async_generating',
-    'async_preparing',
-    'async_processing',
-    'async_ready',
-    'async_zip_ready',
-    'async_close',
-    'async_download',
-    'async_can_close',
-    'async_zip_ready_label_all',
-    'async_zip_ready_label_course',
-    'async_zip_ready_label_user',
-    'async_zip_ready_label_cohort',
-    'async_zip_ready_label_range',
-    // Table strings.
-    'certificates',
-    'template',
-    'date_created',
-    'no_certificates_found',
-    'no_search_results',
-    'type',
-    'download_certificate',
-], 'block_download_certificates');
-
-// Core strings used by certificate_table.js.
-$PAGE->requires->strings_for_js([
-    'user',
-    'email',
-    'course',
-    'actions',
-], 'core');
+// The theme already serves styles.css on every page, as for any block.
+$PAGE->requires->js_call_amd('block_download_certificates/certificate_table', 'init');
+$PAGE->requires->js_call_amd('block_download_certificates/async_download', 'init', [[
+    'userid' => (int) $USER->id,
+    'pendingtasks' => zip_tasks::get_pending((int) $USER->id),
+]]);
 
 echo $OUTPUT->header();
-
-// Render the main page using mustache template.
 echo $OUTPUT->render_from_template('block_download_certificates/main_page', $data);
-
 echo $OUTPUT->footer();

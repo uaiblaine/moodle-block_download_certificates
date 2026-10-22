@@ -1,0 +1,52 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_download_certificates/search_bar
+
+    The table's search field, its clear button and the rows-per-page menu, which
+    certificate_table.js follows by id.
+
+    Context variables required for this template:
+    * perpage - The rows-per-page choices: value, selected.
+
+    Example context (json):
+    {
+        "perpage": [
+            {"value": 25, "selected": false},
+            {"value": 50, "selected": true},
+            {"value": 100, "selected": false}
+        ]
+    }
+}}
+<div class="d-flex flex-wrap align-items-center gap-2">
+    <div class="block-download-certificates-search">
+        <label for="cert-search-input" class="visually-hidden">{{#str}}search_certificates, block_download_certificates{{/str}}</label>
+        <i class="fa fa-search block-download-certificates-search-icon" aria-hidden="true"></i>
+        <input type="search" id="cert-search-input" class="block-download-certificates-search-input"
+               placeholder="{{#cleanstr}}search, core{{/cleanstr}}">
+        <button type="button" id="cert-search-clear" class="block-download-certificates-search-clear"
+                aria-label="{{#cleanstr}}clear_search, block_download_certificates{{/cleanstr}}">
+            <i class="fa fa-times" aria-hidden="true"></i>
+        </button>
+    </div>
+    <label for="cert-perpage" class="visually-hidden">{{#str}}rows_per_page, block_download_certificates{{/str}}</label>
+    <select id="cert-perpage" class="form-select block-download-certificates-perpage">
+        {{#perpage}}
+        <option value="{{value}}"{{#selected}} selected{{/selected}}>{{value}}</option>
+        {{/perpage}}
+    </select>
+</div>

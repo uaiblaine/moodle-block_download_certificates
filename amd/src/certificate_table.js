@@ -1,453 +1,383 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 /**
- * Certificate table module for block_download_certificates.
- *
- * Handles dynamic loading, pagination, sorting, and searching of the
- * certificates table via AJAX calls to search_certificates.php.
+ * The certificates table of the manager and teacher pages: search, sort and paging through the
+ * search web service, and the group menu of the teacher's course form.
  *
  * @module     block_download_certificates/certificate_table
- * @package    block_download_certificates
- * @copyright  2025 E-learning Touch'
+ * @copyright  2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery', 'core/form-autocomplete'], function ($, Autocomplete) {
 
-    /** @var {string} Base URL for AJAX calls */
-    var ajaxBase = M.cfg.wwwroot + '/blocks/download_certificates/ajax/';
+import Ajax from 'core/ajax';
+import Autocomplete from 'core/form-autocomplete';
+import Notification from 'core/notification';
+import Templates from 'core/templates';
+import {getString, getStrings} from 'core/str';
 
-    /** @var {Object} Current state */
-    var state = {
-        page: 0,
-        perpage: 50,
-        search: '',
-        sort: 'timecreated',
-        order: 'DESC',
-        total: 0,
-        sesskey: ''
+const COMPONENT = 'block_download_certificates';
+
+/** @type {string[]} The sort keys of the template's header buttons. */
+const SORTABLE = ['firstname', 'email', 'coursename', 'templatename', 'type', 'timecreated'];
+
+/** @type {number} Pages listed on each side of the current one. */
+const PAGE_SPREAD = 3;
+
+/** @type {number} Milliseconds of quiet typing before a search runs. */
+const SEARCH_DELAY = 300;
+
+const SELECTORS = {
+    container: '#cert-table-container',
+    count: '#cert-result-count',
+    search: '#cert-search-input',
+    clear: '#cert-search-clear',
+    perpage: '#cert-perpage',
+    course: '#course_select',
+    groupwrapper: '#group-select-wrapper',
+    group: '#group_select',
+    menus: ['#course_select', '#cohort_select', '#user_select'],
+};
+
+const state = {
+    page: 0,
+    perpage: 50,
+    search: '',
+    sort: 'timecreated',
+    order: 'DESC',
+};
+
+/** @type {Object} The labels, loaded once by init(). */
+const strings = {};
+
+/** @type {number} Increases with every table request; a response for an older one is dropped. */
+let tablerequest = 0;
+
+/** @type {number} Increases with every group request; a response for an older one is dropped. */
+let grouprequest = 0;
+
+/** @type {boolean} Whether init() ran: a second call would bind every listener twice. */
+let initialised = false;
+
+/**
+ * Load the labels the module writes itself; the template brings its own.
+ *
+ * @returns {Promise}
+ */
+const loadStrings = async() => {
+    const [nosearchresults, nocertificates, allgroups] = await getStrings([
+        {key: 'no_search_results', component: COMPONENT},
+        {key: 'no_certificates_found', component: COMPONENT},
+        {key: 'all_groups', component: COMPONENT},
+    ]);
+    Object.assign(strings, {nosearchresults, nocertificates, allgroups});
+};
+
+/**
+ * The pager's context: the current page with up to PAGE_SPREAD pages on each side, plus the first and
+ * the last.
+ *
+ * @param {number} page The current page, from 0.
+ * @param {number} pages The number of pages.
+ * @returns {Object}
+ */
+const buildPagination = (page, pages) => {
+    const item = (number) => ({page: number, label: number + 1, active: number === page, ellipsis: false});
+    const gap = {page: 0, label: '', active: false, ellipsis: true};
+    const first = Math.max(0, page - PAGE_SPREAD);
+    const last = Math.min(pages - 1, page + PAGE_SPREAD);
+    const items = [];
+    if (first > 0) {
+        items.push(item(0));
+        if (first > 1) {
+            items.push(gap);
+        }
+    }
+    for (let number = first; number <= last; number++) {
+        items.push(item(number));
+    }
+    if (last < pages - 1) {
+        if (last < pages - 2) {
+            items.push(gap);
+        }
+        items.push(item(pages - 1));
+    }
+    return {
+        haspages: pages > 1,
+        previous: {page: Math.max(0, page - 1), disabled: page <= 0},
+        next: {page: Math.min(pages - 1, page + 1), disabled: page >= pages - 1},
+        pages: items,
     };
+};
 
-    /** @var {number|null} Search debounce timer */
-    var searchTimer = null;
-
-    /** Badge colors per certificate type */
-    var typeBadges = {
-        'tool_certificate': { label: 'Tool Certificate', cls: 'badge-primary' },
-        'customcert': { label: 'Custom Cert', cls: 'badge-success' },
-        'mod_certificate': { label: 'Mod Certificate', cls: 'badge-info' },
-        'mod_simplecertificate': { label: 'Simple Cert', cls: 'badge-warning' },
-        'mod_certificatebeautiful': { label: 'Beautiful Cert', cls: 'badge-secondary' }
+/**
+ * The template context of a search result.
+ *
+ * @param {Object} result The search web service's result.
+ * @returns {Object}
+ */
+const buildContext = (result) => {
+    const columns = {};
+    const ascending = state.order === 'ASC';
+    SORTABLE.forEach((key) => {
+        if (key === state.sort) {
+            columns[key] = {
+                ariasort: ascending ? 'ascending' : 'descending',
+                icon: ascending ? 'fa-sort-up' : 'fa-sort-down',
+            };
+        } else {
+            columns[key] = {ariasort: 'none', icon: 'fa-sort'};
+        }
+    });
+    return {
+        hasrows: result.rows.length > 0,
+        emptymessage: state.search ? strings.nosearchresults : strings.nocertificates,
+        columns,
+        rows: result.rows,
+        pagination: buildPagination(result.page, result.pages),
     };
+};
 
-    /**
-     * Initialize the certificate table module.
-     *
-     * @param {Object} config Configuration from PHP
-     * @param {string} config.sesskey Session key
-     * @param {number} config.total_count Total certificates
-     */
-    function init(config) {
-        state.sesskey = config.sesskey || M.cfg.sesskey;
-        state.total = config.total_count || 0;
-
-        // Bind events.
-        bindSearchInput();
-        bindPerPageSelect();
-        bindSortHeaders();
-        bindCourseGroupSelector();
-
-        // Initial load.
-        loadPage();
-
-        // Initialize autocomplete on selects.
-        initAutocomplete();
+/**
+ * Write the range of rows shown into the result count.
+ *
+ * @param {Object} result The search web service's result.
+ * @param {number} request The table request the result answers.
+ * @returns {Promise}
+ */
+const updateCount = async(result, request) => {
+    const element = document.querySelector(SELECTORS.count);
+    if (!element) {
+        return;
     }
-
-    /**
-     * Initialize Moodle core autocomplete on the 3 filter selects.
-     */
-    function initAutocomplete() {
-        var selects = ['#course_select', '#cohort_select', '#user_select'];
-        selects.forEach(function (selector) {
-            var el = document.querySelector(selector);
-            if (el) {
-                Autocomplete.enhance(
-                    selector,
-                    false, // No tags.
-                    false, // No ajax.
-                    '', // No placeholder override.
-                    false, // Not case sensitive.
-                    true, // Show suggestions on focus.
-                    '', // No no-selection string.
-                    true // Close on select.
-                );
-            }
-        });
+    let text = strings.nocertificates;
+    if (result.total > 0) {
+        const first = result.page * result.perpage + 1;
+        const last = Math.min(first + result.rows.length - 1, result.total);
+        text = await getString('result_count', COMPONENT, {first, last, total: result.total});
     }
-
-    /**
-     * Bind the search input with debounce.
-     */
-    function bindSearchInput() {
-        var input = document.getElementById('cert-search-input');
-        if (!input) {
-            return;
-        }
-
-        input.addEventListener('input', function () {
-            if (searchTimer) {
-                clearTimeout(searchTimer);
-            }
-            searchTimer = setTimeout(function () {
-                state.search = input.value.trim();
-                state.page = 0;
-                loadPage();
-            }, 300);
-        });
-
-        // Clear button.
-        var clearBtn = document.getElementById('cert-search-clear');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', function () {
-                input.value = '';
-                state.search = '';
-                state.page = 0;
-                loadPage();
-            });
-        }
+    if (request === tablerequest) {
+        element.textContent = text;
     }
+};
 
-    /**
-     * Bind per-page select change.
-     */
-    function bindPerPageSelect() {
-        var select = document.getElementById('cert-perpage');
-        if (!select) {
-            return;
-        }
-
-        select.addEventListener('change', function () {
-            state.perpage = parseInt(select.value, 10);
-            state.page = 0;
-            loadPage();
-        });
+/**
+ * Load and render the current page of the table.
+ *
+ * @returns {Promise}
+ */
+const loadPage = async() => {
+    const container = document.querySelector(SELECTORS.container);
+    if (!container) {
+        return;
     }
-
-    /**
-     * Bind sort headers in the table.
-     */
-    function bindSortHeaders() {
-        document.addEventListener('click', function (e) {
-            var header = e.target.closest('[data-sort]');
-            if (!header) {
-                return;
-            }
-
-            var sortField = header.getAttribute('data-sort');
-            if (state.sort === sortField) {
-                state.order = state.order === 'ASC' ? 'DESC' : 'ASC';
-            } else {
-                state.sort = sortField;
-                state.order = 'DESC';
-            }
-            state.page = 0;
-            loadPage();
-        });
-    }
-
-    /**
-     * Écoute le changement de cours et charge les groupes de l'enseignant
-     * via AJAX. Affiche le sélecteur de groupe si ≥1 groupe est disponible.
-     */
-    function bindCourseGroupSelector() {
-        var courseSelect = document.getElementById('course_select');
-        var groupWrapper = document.getElementById('group-select-wrapper');
-        var groupSelect  = document.getElementById('group_select');
-
-        if (!courseSelect || !groupWrapper || !groupSelect) {
-            return;
-        }
-
-        courseSelect.addEventListener('change', function () {
-            var courseid = courseSelect.value;
-
-            // Réinitialiser et masquer le sélecteur de groupe.
-            groupWrapper.style.display = 'none';
-            groupSelect.innerHTML = '';
-
-            if (!courseid) {
-                return;
-            }
-
-            // Appel AJAX pour récupérer les groupes du cours.
-            $.ajax({
-                url: ajaxBase + 'get_groups_for_course.php',
-                method: 'GET',
-                data: {
-                    courseid: courseid,
-                    sesskey: state.sesskey
-                },
-                dataType: 'json',
-                success: function (response) {
-                    if (!response.success || !response.groups || response.groups.length === 0) {
-                        // Pas de groupes : ne pas afficher le sélecteur.
-                        return;
-                    }
-
-                    // Construire les options : d'abord "Tous les groupes".
-                    var allLabel = M.util.get_string('all_groups', 'block_download_certificates') ||
-                                  'Tous les groupes';
-                    var html = '<option value="">' + allLabel + '</option>';
-
-                    response.groups.forEach(function (g) {
-                        html += '<option value="' + g.id + '">' +
-                            escapeHtml(g.name) + '</option>';
-                    });
-
-                    groupSelect.innerHTML = html;
-                    groupWrapper.style.display = '';
-                }
-            });
-        });
-    }
-
-    /**
-     * Load a page of certificates via AJAX.
-     */
-    function loadPage() {
-        var container = document.getElementById('cert-table-container');
-        if (!container) {
-            return;
-        }
-
-        // Show loading.
-        showLoading(container);
-
-        $.ajax({
-            url: ajaxBase + 'search_certificates.php',
-            method: 'GET',
-            data: {
+    tablerequest += 1;
+    const request = tablerequest;
+    container.setAttribute('aria-busy', 'true');
+    try {
+        const result = await Ajax.call([{
+            methodname: 'block_download_certificates_search_certificates',
+            args: {
                 search: state.search,
-                page: state.page,
-                perpage: state.perpage,
                 sort: state.sort,
                 order: state.order,
-                sesskey: state.sesskey
+                page: state.page,
+                perpage: state.perpage,
             },
-            dataType: 'json',
-            success: function (response) {
-                if (response.success) {
-                    state.total = response.total;
-                    renderTable(container, response.data);
-                    renderPagination(response.total, response.page, response.perpage, response.pages);
-                    updateResultCount(response.total);
-                } else {
-                    container.innerHTML = '<div class="alert alert-danger">' +
-                        '<i class="fa fa-exclamation-triangle"></i> ' + (response.error || 'Error loading data') +
-                        '</div>';
-                }
-            },
-            error: function () {
-                container.innerHTML = '<div class="alert alert-danger">' +
-                    '<i class="fa fa-exclamation-triangle"></i> Network error. Please try again.' +
-                    '</div>';
-            }
-        });
-    }
-
-    /**
-     * Show loading spinner in container.
-     *
-     * @param {HTMLElement} container
-     */
-    function showLoading(container) {
-        container.innerHTML = '<div class="text-center py-4">' +
-            '<i class="fa fa-spinner fa-spin fa-2x text-primary"></i>' +
-            '<p class="mt-2 text-muted">' +
-            (M.util.get_string('loading', 'core') || 'Loading...') +
-            '</p></div>';
-    }
-
-    /**
-     * Render the certificate table.
-     *
-     * @param {HTMLElement} container
-     * @param {Array} data Certificate records
-     */
-    function renderTable(container, data) {
-        if (!data || data.length === 0) {
-            container.innerHTML = '<div class="alert alert-info text-center">' +
-                '<i class="fa fa-info-circle fa-2x mb-2"></i>' +
-                '<p>' + (state.search ?
-                    (M.util.get_string('no_search_results', 'block_download_certificates') || 'No results found for your search.') :
-                    (M.util.get_string('no_certificates_found', 'block_download_certificates') || 'No certificates found.')) +
-                '</p></div>';
+        }])[0];
+        if (request !== tablerequest) {
             return;
         }
-
-        var sortIcon = function (field) {
-            if (state.sort !== field) {
-                return '<i class="fa fa-sort text-muted ml-1"></i>';
-            }
-            return state.order === 'ASC' ?
-                '<i class="fa fa-sort-up ml-1"></i>' :
-                '<i class="fa fa-sort-down ml-1"></i>';
-        };
-
-        var html = '<div class="table-responsive">' +
-            '<table class="table table-striped table-hover cert-table">' +
-            '<thead>' +
-            '<tr>' +
-            '<th data-sort="firstname" role="button" class="sortable-header">' +
-            (M.util.get_string('user', 'core') || 'User') + sortIcon('firstname') + '</th>' +
-            '<th data-sort="email" role="button" class="sortable-header">' +
-            (M.util.get_string('email', 'core') || 'Email') + sortIcon('email') + '</th>' +
-            '<th data-sort="coursename" role="button" class="sortable-header">' +
-            (M.util.get_string('course', 'core') || 'Course') + sortIcon('coursename') + '</th>' +
-            '<th data-sort="templatename" role="button" class="sortable-header">' +
-            (M.util.get_string('template', 'block_download_certificates') || 'Template') + sortIcon('templatename') + '</th>' +
-            '<th data-sort="cert_type" role="button" class="sortable-header">' +
-            (M.util.get_string('type', 'block_download_certificates') || 'Type') + sortIcon('cert_type') + '</th>' +
-            '\x3cth data-sort="timecreated" role="button" class="sortable-header"\x3e' +
-            (M.util.get_string('date_created', 'block_download_certificates') || 'Date') + sortIcon('timecreated') + '\x3c/th\x3e' +
-            '\x3cth class="text-center"\x3e' +
-            (M.util.get_string('actions', 'core') || 'Actions') + '\x3c/th\x3e' +
-            '\x3c/tr\x3e' +
-            '\x3c/thead\x3e' +
-            '\x3ctbody\x3e';
-
-        data.forEach(function (cert, index) {
-            var badge = typeBadges[cert.cert_type] || { label: cert.cert_type, cls: 'badge-dark' };
-            html += '<tr class="cert-row" style="animation-delay:' + (index * 20) + 'ms">' +
-                '<td><strong>' + escapeHtml(cert.username) + '</strong></td>' +
-                '<td><small class="text-muted">' + escapeHtml(cert.email) + '</small></td>' +
-                '<td>' + escapeHtml(cert.coursename) + '</td>' +
-                '<td>' + escapeHtml(cert.templatename) + '</td>' +
-                '<td><span class="badge ' + badge.cls + '">' + escapeHtml(badge.label) + '</span></td>' +
-                '<td><small>' + escapeHtml(cert.timecreated) + '</small></td>' +
-                '<td class="text-center"><a href="' + escapeHtml(cert.download_url) + '" ' +
-                'class="btn btn-sm btn-outline-primary" title="' +
-                (M.util.get_string('download_certificate', 'block_download_certificates') || 'Download') + '">' +
-                '<i class="fa fa-download"></i></a></td>' +
-                '</tr>';
-        });
-
-        html += '</tbody></table></div>';
-        container.innerHTML = html;
-    }
-
-    /**
-     * Render pagination controls.
-     *
-     * @param {number} total Total results
-     * @param {number} page Current page
-     * @param {number} perpage Items per page
-     * @param {number} pages Total pages
-     */
-    function renderPagination(total, page, perpage, pages) {
-        var container = document.getElementById('cert-pagination');
-        if (!container) {
+        const {html, js} = await Templates.renderForPromise('block_download_certificates/certificate_rows', buildContext(result));
+        if (request !== tablerequest) {
             return;
         }
-
-        if (pages <= 1) {
-            container.innerHTML = '';
-            return;
+        state.page = result.page;
+        Templates.replaceNodeContents(container, html, js);
+        await updateCount(result, request);
+    } catch (error) {
+        if (request === tablerequest) {
+            Notification.exception(error);
         }
-
-        var html = '<nav aria-label="Certificate pagination"><ul class="pagination pagination-sm justify-content-center">';
-
-        // Previous button.
-        html += '<li class="page-item ' + (page === 0 ? 'disabled' : '') + '">' +
-            '<a class="page-link" href="#" data-page="' + (page - 1) + '" aria-label="Previous">' +
-            '<i class="fa fa-chevron-left"></i></a></li>';
-
-        // Page numbers (show max 7 pages).
-        var startPage = Math.max(0, page - 3);
-        var endPage = Math.min(pages - 1, startPage + 6);
-        startPage = Math.max(0, endPage - 6);
-
-        if (startPage > 0) {
-            html += '<li class="page-item"><a class="page-link" href="#" data-page="0">1</a></li>';
-            if (startPage > 1) {
-                html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
-            }
+    } finally {
+        if (request === tablerequest) {
+            container.removeAttribute('aria-busy');
         }
+    }
+};
 
-        for (var i = startPage; i <= endPage; i++) {
-            html += '<li class="page-item ' + (i === page ? 'active' : '') + '">' +
-                '<a class="page-link" href="#" data-page="' + i + '">' + (i + 1) + '</a></li>';
-        }
+/**
+ * Sort by a header's column, or turn the order round when it is the current one.
+ *
+ * @param {string} key The sort key.
+ */
+const sortBy = (key) => {
+    if (state.sort === key) {
+        state.order = state.order === 'ASC' ? 'DESC' : 'ASC';
+    } else {
+        state.sort = key;
+        state.order = 'ASC';
+    }
+    state.page = 0;
+    loadPage();
+};
 
-        if (endPage < pages - 1) {
-            if (endPage < pages - 2) {
-                html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
-            }
-            html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (pages - 1) + '">' +
-                pages + '</a></li>';
-        }
+/**
+ * Handle the header and pager buttons the template renders.
+ *
+ * @param {Event} event The click.
+ */
+const onTableClick = (event) => {
+    const sortbutton = event.target.closest('[data-sort]');
+    if (sortbutton) {
+        sortBy(sortbutton.dataset.sort);
+        return;
+    }
+    const pagebutton = event.target.closest('[data-page]');
+    if (pagebutton && !pagebutton.disabled) {
+        state.page = parseInt(pagebutton.dataset.page, 10) || 0;
+        loadPage();
+    }
+};
 
-        // Next button.
-        html += '<li class="page-item ' + (page >= pages - 1 ? 'disabled' : '') + '">' +
-            '<a class="page-link" href="#" data-page="' + (page + 1) + '" aria-label="Next">' +
-            '<i class="fa fa-chevron-right"></i></a></li>';
-
-        html += '</ul></nav>';
-
-        container.innerHTML = html;
-
-        // Bind click events.
-        container.querySelectorAll('[data-page]').forEach(function (link) {
-            link.addEventListener('click', function (e) {
-                e.preventDefault();
-                var newPage = parseInt(link.getAttribute('data-page'), 10);
-                if (newPage >= 0 && newPage < pages && newPage !== state.page) {
-                    state.page = newPage;
-                    loadPage();
-                    // Scroll to top of table.
-                    var tableTop = document.getElementById('cert-table-container');
-                    if (tableTop) {
-                        tableTop.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                }
-            });
+/**
+ * Run the search after a pause in typing, and at once when the field is cleared.
+ */
+const bindSearch = () => {
+    const input = document.querySelector(SELECTORS.search);
+    if (!input) {
+        return;
+    }
+    let timer = null;
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            state.search = input.value.trim();
+            state.page = 0;
+            loadPage();
+        }, SEARCH_DELAY);
+    });
+    const clear = document.querySelector(SELECTORS.clear);
+    if (clear) {
+        clear.addEventListener('click', () => {
+            clearTimeout(timer);
+            input.value = '';
+            state.search = '';
+            state.page = 0;
+            loadPage();
         });
     }
+};
 
-    /**
-     * Update the result count display.
-     *
-     * @param {number} total Total results
-     */
-    function updateResultCount(total) {
-        var el = document.getElementById('cert-result-count');
-        if (el) {
-            var start = state.page * state.perpage + 1;
-            var end = Math.min(start + state.perpage - 1, total);
-            if (total === 0) {
-                el.textContent = '0 ' +
-                    (M.util.get_string('certificates', 'block_download_certificates') || 'certificates');
-            } else {
-                el.textContent = start + '-' + end + ' / ' + total + ' ' +
-                    (M.util.get_string('certificates', 'block_download_certificates') || 'certificates');
-            }
-        }
+/**
+ * Follow the rows-per-page menu.
+ */
+const bindPerPage = () => {
+    const select = document.querySelector(SELECTORS.perpage);
+    if (!select) {
+        return;
     }
+    state.perpage = parseInt(select.value, 10) || state.perpage;
+    select.addEventListener('change', () => {
+        state.perpage = parseInt(select.value, 10) || state.perpage;
+        state.page = 0;
+        loadPage();
+    });
+};
 
-    /**
-     * Escape HTML entities.
-     *
-     * @param {string} text
-     * @return {string}
-     */
-    function escapeHtml(text) {
-        if (!text) {
-            return '';
-        }
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+/**
+ * Fill the group menu of the teacher's course form with the groups of the chosen course.
+ *
+ * @param {HTMLSelectElement} course The course menu.
+ * @param {HTMLElement} wrapper The group menu's wrapper, hidden when the course has no group.
+ * @param {HTMLSelectElement} group The group menu.
+ * @returns {Promise}
+ */
+const loadGroups = async(course, wrapper, group) => {
+    grouprequest += 1;
+    const request = grouprequest;
+    group.replaceChildren();
+    wrapper.hidden = true;
+    const courseid = parseInt(course.value, 10) || 0;
+    if (!courseid) {
+        return;
     }
+    try {
+        const {groups} = await Ajax.call([{
+            methodname: 'block_download_certificates_get_groups',
+            args: {courseid},
+        }])[0];
+        if (request !== grouprequest || !groups.length) {
+            return;
+        }
+        group.append(new Option(strings.allgroups, ''));
+        groups.forEach(({id, name}) => group.append(new Option(name, String(id))));
+        wrapper.hidden = false;
+    } catch (error) {
+        Notification.exception(error);
+    }
+};
 
-    return {
-        init: init
-    };
-});
+/**
+ * Bind the group menu of the teacher's course form, where there is one.
+ */
+const bindGroups = () => {
+    const course = document.querySelector(SELECTORS.course);
+    const wrapper = document.querySelector(SELECTORS.groupwrapper);
+    const group = document.querySelector(SELECTORS.group);
+    if (!course || !wrapper || !group) {
+        return;
+    }
+    course.addEventListener('change', () => loadGroups(course, wrapper, group));
+};
+
+/**
+ * Turn the download forms' menus into searchable ones.
+ */
+const enhanceMenus = () => {
+    SELECTORS.menus.forEach((selector) => {
+        if (document.querySelector(selector)) {
+            Autocomplete.enhance(selector, false, false, '', false, true, '', true).catch(Notification.exception);
+        }
+    });
+};
+
+/**
+ * Start the table.
+ *
+ * @returns {Promise}
+ */
+export const init = async() => {
+    if (initialised) {
+        return;
+    }
+    initialised = true;
+    try {
+        await loadStrings();
+    } catch (error) {
+        Notification.exception(error);
+        return;
+    }
+    const container = document.querySelector(SELECTORS.container);
+    if (container) {
+        container.addEventListener('click', onTableClick);
+    }
+    bindSearch();
+    bindPerPage();
+    bindGroups();
+    enhanceMenus();
+    await loadPage();
+};

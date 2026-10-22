@@ -15,67 +15,50 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Certificate download handler for block_download_certificates plugin.
+ * Download every certificate, or those issued in a date range, as one ZIP (managers only).
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_download_certificates\local\download;
+use block_download_certificates\local\filter;
+use block_download_certificates\local\request;
+use block_download_certificates\local\scope;
+
 require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/lib.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
 
-require_login();
+require_login(null, false);
+request::reject_guest();
+request::require_post_sesskey();
 
-$context = context_system::instance();
-require_capability('block/download_certificates:manage', $context);
-
-// Get parameters.
 $action = optional_param('action', '', PARAM_ALPHANUMEXT);
-$timecreated = optional_param('timecreated', 0, PARAM_INT);
-$code = optional_param('code', '', PARAM_ALPHANUMEXT);
-$startdate = optional_param('start_date', '', PARAM_TEXT);
-$enddate = optional_param('end_date', '', PARAM_TEXT);
 
-// Validate sesskey for security.
-require_sesskey();
+$PAGE->set_context(context_system::instance());
+$PAGE->set_url('/blocks/download_certificates/download.php');
 
-// Initialize controller.
-$controller = new block_download_certificates_controller();
-
-if ($action === 'download_all' || $action === 'downloadall') {
-    $controller->download_all_certificates();
-    exit;
+$scope = scope::for_user((int) $USER->id);
+if (!in_array($action, ['download_all', 'download_range'], true)) {
+    redirect(request::panel_url($scope));
 }
 
-if ($action === 'download_range') {
-    if (empty($startdate) || empty($enddate)) {
-        throw new moodle_exception('invalidparameters', 'block_download_certificates');
+try {
+    if ($action === 'download_range') {
+        $type = 'range';
+        [$datefrom, $dateto] = request::date_range(
+            optional_param('start_date', '', PARAM_ALPHANUMEXT),
+            optional_param('end_date', '', PARAM_ALPHANUMEXT)
+        );
+        $filter = filter::from_array(['datefrom' => $datefrom, 'dateto' => $dateto]);
+    } else {
+        $type = 'all';
+        $filter = new filter();
     }
-
-    // Convert date strings to timestamps.
-    $starttime = strtotime($startdate . ' 00:00:00');
-    $endtime = strtotime($enddate . ' 23:59:59');
-
-    if ($starttime === false || $endtime === false) {
-        throw new moodle_exception('invalidaterange', 'block_download_certificates');
-    }
-
-    $controller->download_certificates_by_date_range($starttime, $endtime);
-    exit;
+    request::check_zip($scope, $type, $filter);
+    download::send_zip($scope, $filter, request::zip_filename($type, $filter));
+} catch (moodle_exception $e) {
+    request::redirect_on_error($scope, $e);
 }
-
-if (($action === 'download_single' || $action === 'downloadsingle') && !empty($timecreated) && !empty($code)) {
-    try {
-        $controller->download_single_certificate($timecreated, $code);
-    } catch (Exception $e) {
-        throw $e;
-    }
-    exit;
-}
-
-// If we get here, redirect back to main page.
-redirect(new moodle_url('/blocks/download_certificates/index.php'));

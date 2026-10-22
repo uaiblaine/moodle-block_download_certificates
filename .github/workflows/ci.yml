@@ -1,0 +1,38 @@
+name: ci
+
+# workflow_dispatch launches a run by hand, for a push whose commits would
+# otherwise skip CI, without pushing another commit.
+#
+# push is filtered to the branches that are merge targets: a feature branch is
+# tested by its pull_request event, and a push run on the same commit would
+# repeat the whole pipeline for no extra information.
+on:
+  push:
+    branches:
+      - main
+      - 'MOODLE_*_STABLE'
+  pull_request:
+  workflow_dispatch:
+
+# Supersede a run when new commits arrive on the same pull request: pushing
+# three fixes in a row otherwise leaves three full pipelines running to the end.
+# Only pull requests are superseded: a push to a merge target is the only run its
+# commit will ever get, and a second merge landing quickly must not cancel it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # This branch supports Moodle 4.5 only ($plugin->supported = [405, 405]); the
+  # other versions live on main (5.3) and the other MOODLE_*_STABLE branches.
+  # The only job runs the full PHP x DB matrix. PHPUnit and Behat run on every
+  # runtime leg. The certificate plugins are installed from their upstream
+  # branches that support Moodle 4.5.
+  ci-405:
+    name: Moodle 4.05
+    uses: uaiblaine/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
+    with:
+      moodle-core-branch: MOODLE_405_STABLE
+      plugin-dependencies: |
+        mdjnelson/moodle-mod_customcert,MOODLE_404_STABLE
+        moodleworkplace/moodle-tool_certificate,MOODLE_400_STABLE

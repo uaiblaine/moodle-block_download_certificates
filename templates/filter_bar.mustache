@@ -1,0 +1,144 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_download_certificates/filter_bar
+
+    The download tabs of the manager and teacher pages: a date range, or one course, cohort or user
+    picked from a menu, each a POST form to its ZIP page. The first tab starts selected; Bootstrap
+    moves the selection and its state. Each tab carries both data-toggle (Bootstrap 4, Moodle 4.5)
+    and data-bs-toggle (Bootstrap 5, Moodle 5.x).
+
+    Data attributes required for JS (async_download.js):
+    * data-download-type, data-cert-count, data-async-threshold - The background download marks.
+    * data-count - On a menu option, the certificates it holds, copied onto the form when chosen.
+
+    Context variables required for this template:
+    * tabs - The tabs: id, icon, label, help, active, range (url, sesskey, count, threshold,
+      buttonlabel, or false), menu (url, sesskey, threshold, type, action, selectid, name,
+      selectlabel, placeholder, options (value, text, count), groups, buttonlabel, or false).
+
+    Example context (json):
+    {
+        "tabs": [
+            {
+                "id": "daterange",
+                "icon": "fa-calendar",
+                "label": "By date range",
+                "help": "Select a date range to download all certificates issued within that period.",
+                "active": true,
+                "range": {
+                    "url": "https://example.com/blocks/download_certificates/download_range.php",
+                    "sesskey": "abc123",
+                    "count": 42,
+                    "threshold": 30,
+                    "buttonlabel": "Download Range"
+                },
+                "menu": false
+            },
+            {
+                "id": "course",
+                "icon": "fa-graduation-cap",
+                "label": "By course",
+                "help": "Select a course to download all certificates issued for that course.",
+                "active": false,
+                "range": false,
+                "menu": {
+                    "url": "https://example.com/blocks/download_certificates/download_course.php",
+                    "sesskey": "abc123",
+                    "threshold": 30,
+                    "type": "course",
+                    "action": "download_course",
+                    "selectid": "course_select",
+                    "name": "courseid",
+                    "selectlabel": "Course",
+                    "placeholder": "-- Choose a course --",
+                    "options": [
+                        {"value": 7, "text": "Analytical engines", "count": 12}
+                    ],
+                    "groups": true,
+                    "buttonlabel": "Download Course Certificates"
+                }
+            }
+        ]
+    }
+}}
+<div class="card mb-4">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" role="tablist">
+            {{#tabs}}
+            <li class="nav-item" role="presentation">
+                <a class="nav-link{{#active}} active{{/active}}" id="block-download-certificates-tab-{{id}}"
+                   href="#block-download-certificates-pane-{{id}}" data-toggle="tab" data-bs-toggle="tab"
+                   role="tab" aria-controls="block-download-certificates-pane-{{id}}"
+                   aria-selected="{{#active}}true{{/active}}{{^active}}false{{/active}}">
+                    <i class="fa {{icon}} me-1" aria-hidden="true"></i>{{label}}
+                </a>
+            </li>
+            {{/tabs}}
+        </ul>
+    </div>
+    <div class="card-body tab-content">
+        {{#tabs}}
+        <div class="tab-pane fade{{#active}} show active{{/active}}" id="block-download-certificates-pane-{{id}}"
+             role="tabpanel" aria-labelledby="block-download-certificates-tab-{{id}}" tabindex="0">
+            <p class="text-muted small mb-3">{{help}}</p>
+            {{#range}}
+            <form method="post" action="{{url}}" class="d-flex flex-wrap align-items-end gap-2"
+                  data-download-type="range" data-cert-count="{{count}}" data-async-threshold="{{threshold}}">
+                <input type="hidden" name="sesskey" value="{{sesskey}}">
+                <div>
+                    <label for="start_date" class="d-block mb-1">{{#str}}start_date, block_download_certificates{{/str}}</label>
+                    <input type="date" id="start_date" name="start_date" class="form-control" required>
+                </div>
+                <div>
+                    <label for="end_date" class="d-block mb-1">{{#str}}end_date, block_download_certificates{{/str}}</label>
+                    <input type="date" id="end_date" name="end_date" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-download me-1" aria-hidden="true"></i>{{buttonlabel}}
+                </button>
+            </form>
+            {{/range}}
+            {{#menu}}
+            <form method="post" action="{{url}}" class="d-flex flex-wrap align-items-end gap-2"
+                  data-download-type="{{type}}" data-cert-count="0" data-async-threshold="{{threshold}}">
+                <input type="hidden" name="action" value="{{action}}">
+                <input type="hidden" name="sesskey" value="{{sesskey}}">
+                <div class="block-download-certificates-menu">
+                    <label for="{{selectid}}" class="visually-hidden">{{selectlabel}}</label>
+                    <select id="{{selectid}}" name="{{name}}" class="form-select" required>
+                        <option value="">{{placeholder}}</option>
+                        {{#options}}
+                        <option value="{{value}}" data-count="{{count}}">{{text}} ({{count}} {{#str}}certificates, block_download_certificates{{/str}})</option>
+                        {{/options}}
+                    </select>
+                </div>
+                {{#groups}}
+                <div class="block-download-certificates-menu" id="group-select-wrapper" hidden>
+                    <label for="group_select" class="visually-hidden">{{#str}}choose_group, block_download_certificates{{/str}}</label>
+                    <select id="group_select" name="groupid" class="form-select"></select>
+                </div>
+                {{/groups}}
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-download me-1" aria-hidden="true"></i>{{buttonlabel}}
+                </button>
+            </form>
+            {{/menu}}
+        </div>
+        {{/tabs}}
+    </div>
+</div>
