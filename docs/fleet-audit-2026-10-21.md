@@ -201,36 +201,55 @@ into attributes after the split). mustache (no example contexts) and grunt (esli
 stylelint 3) stay red until stages 2 and 3 rewrite the templates, JavaScript and CSS, so the
 branch merges as a whole once every gate is green, not stage by stage.
 
-## Status (2026-10-21, end of day)
+## Status (2026-10-22, end of the adoption; nothing pushed)
 
-Local commits on `fleet-adoption`, nothing pushed: `7c2edc9` stage 0, `ad12b22` stage 1a (data
-layer, contract `docs/stage1-design.md`), `23ac04f` stage 1b (every path rewired, legacy classes
-deleted), `9cda6d6` stage 1c (gaps of the security read). PHPUnit 98 tests, 511 assertions green on
-4.5/8.3/pgsql, 5.3/8.4/pgsql and 5.3/8.4/mariadb with both certificate plugins installed; phpcs,
-phpdoc, validate, savepoints clean; mustache and grunt red until stages 2-3.
+Every stage is done and committed locally. Nothing is pushed, merged into `main`, tagged or
+released: those steps are the owner's.
 
-Stage 2 (2026-10-22, contract `docs/stage2-design.md`): four external functions replace the JSON
-scripts, both AMD modules are ES modules on core APIs, no sesskey in any URL, ZIP pages POST-only;
-PHPUnit 118 tests, 627 assertions on the same three legs; eslint clean; grunt still stops at
-stylelint and mustache at the two old page templates (stage 3).
+Branches (local only):
 
-Stage 3 (2026-10-22, contract `docs/stage3-design.md`): the block and both pages rendered by
-templates (no `html_writer`), placement-scoped block, Bootstrap 5 names with the 4.5 polyfill on the
-plugin's own pages, theme tokens, accessibility. Every gate green for the first time on
-4.5/8.3/pgsql and 5.3/8.4/pgsql (codebase, phplint, phpcs, leftover, phpdoc, validate, savepoints,
-mustache, grunt, phpunit) and PHPUnit on 5.3/8.4/mariadb: 144 tests, 834 assertions.
+| Branch | Worktree | Head | Moodle | version |
+|---|---|---|---|---|
+| `fleet-adoption` | `~/dev/moodle-block_download_certificates` | stage 0-4 + fork ci.yml | 4.5-5.3 (pre-split state) | 2026100504 |
+| `MOODLE_503_STABLE` (to become `main`) | `~/dev/moodle-block_download_certificates-503` | `b7f2cbd` | 5.3 | 2026100505 |
+| `MOODLE_502_STABLE` | `~/dev/moodle-block_download_certificates-502` | `aec3811` | 5.2 | 2026042000 |
+| `MOODLE_501_STABLE` | `~/dev/moodle-block_download_certificates-501` | `48a51fe` | 5.1 | 2025100600 |
+| `MOODLE_405_STABLE` | `~/dev/moodle-block_download_certificates-405` | `19e1e37` | 4.5 | 2024100700 |
 
-Next: stage 4 (comment pass over every file, Behat smoke, `mdl mutate --fast` over the guards, the
-block's name-escaping test), then stage 5 (branch split, matrix on every branch, releases).
+Stage commits on `fleet-adoption`: `7c2edc9` stage 0, `ad12b22`/`23ac04f`/`9cda6d6` stage 1,
+`675d82c` stage 2, `3d2645f` stage 3, `7087fe9`/`e354085`/`fd1e011` stage 4, `5ebe2fe` fork
+workflow. Each MOODLE_*_STABLE branch starts at `fd1e011`; the 5.x branches add one commit dropping
+the Bootstrap 4 support (`df94118` on 503, cherry-picked), one with the branch values, one with the
+coverage marker and the fork workflow; the 4.5 branch adds the branch values and the fork workflow.
 
-Open:
-- Owner decision: the group rule reads the course's group mode, not the certificate activity's.
-- The certificate plugins reach `mdl ci` only through the uncommitted moodle-dev worktree
-  `~/dev/moodle-dev-dlcerts` (branch `ci-deps-download-certificates`, `bin/mdl-ci`
-  `extra_deps_for()`; clones in `~/dev/moodle-dev/deps/`): run `~/dev/moodle-dev-dlcerts/bin/mdl-ci`
-  until it is committed and merged (moodle-dev needs a pull request).
-- `ci.yml` has no `plugin-dependencies` yet, so GitHub would skip the source tests.
-- 5.x legs behind the proxy need `NPM_CONFIG_PREFER_OFFLINE=true NPM_CONFIG_IGNORE_SCRIPTS=true`.
+Verification (`mdl ci --matrix --behat`, through a scratch moodle-dev at
+`~/dev/moodle-dev-dlcombo` carrying the two pending moodle-dev changes below):
+
+- 4.5: 6 legs (PHP 8.1/8.2/8.3 x pgsql/mariadb), PHPUnit 154 tests, 934 assertions and Behat 5
+  scenarios, 66 steps on every leg; every static gate green (grunt re-run through the fork path).
+- 5.3, 5.2: 4 legs each (8.3/8.4 x pgsql/mariadb); 5.1: 6 legs (8.2/8.3/8.4 x pgsql/mariadb):
+  PHPUnit 151 tests, 915 assertions and Behat 5 scenarios on every leg; every static gate green
+  after the coverage marker and the fork workflow.
+- `mdl mutate --fast` (5.3/8.4) over 87 guards on `fd1e011`: every gate reddened every test it
+  names, on pgsql and on mariadb.
+
+Open for the owner:
+
+1. moodle-dev: two uncommitted changes the local verification depends on —
+   `~/dev/moodle-dev-dlcerts` (branch `ci-deps-download-certificates`: `mdl ci` installs
+   mod_customcert and tool_certificate for this plugin) and `~/dev/moodle-dev-gherkin` (branch
+   `ci-gherkinlint-own-features`) with its twin in `~/dev/moodle-workflows-gherkin` (fork branch
+   `gherkinlint-skip-dependencies`: gherkinlint skips the dependencies' features). Until the fork's
+   change reaches its `main`, GitHub's grunt gate fails on the two plugins' shared feature names.
+   `~/dev/moodle-dev-dlcombo` is a disposable worktree (detached, one scratch commit) combining both.
+2. Push the four branches, make `main` = `MOODLE_503_STABLE`, tag releases (`v5.3-r1` ...).
+3. Mount the plugin on stacks (`plugins.conf`, one checkout per branch) if wanted.
+4. Design questions left open: the group rule reads the course's group mode, not the certificate
+   activity's; the archive hand-over re-checks the request, not each certificate (accepted in
+   `docs/stage1-design.md`); the fleet CI template's `cancel-in-progress` cancels push runs on
+   `MOODLE_*_STABLE` (fixed here, template unchanged).
+5. On 5.3, PHPUnit reports one deprecation per test class (docblock metadata); moving to
+   attributes on the 5.x branches is a later modernisation.
 
 ## Stage 1 prerequisite: certificate plugins in CI
 
