@@ -346,7 +346,6 @@ final class templates_test extends \advanced_testcase {
         $this->assertSame('false', $tabs->item(1)->getAttribute('aria-selected'));
         foreach ($tabs as $tab) {
             $this->assertSame('tab', $tab->getAttribute('data-bs-toggle'));
-            $this->assertSame('tab', $tab->getAttribute('data-toggle'));
             $panel = $xpath->query('//*[@id="' . $tab->getAttribute('aria-controls') . '"]')->item(0);
             $this->assertSame('tabpanel', $panel->getAttribute('role'));
             $this->assertSame($tab->getAttribute('id'), $panel->getAttribute('aria-labelledby'));

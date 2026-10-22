@@ -19,8 +19,7 @@
 
     The download tabs of the manager and teacher pages: a date range, or one course, cohort or user
     picked from a menu, each a POST form to its ZIP page. The first tab starts selected; Bootstrap
-    moves the selection and its state. Each tab carries both data-toggle (Bootstrap 4, Moodle 4.5)
-    and data-bs-toggle (Bootstrap 5, Moodle 5.x).
+    moves the selection and its state.
 
     Data attributes required for JS (async_download.js):
     * data-download-type, data-cert-count, data-async-threshold - The background download marks.
@@ -82,7 +81,7 @@
             {{#tabs}}
             <li class="nav-item" role="presentation">
                 <a class="nav-link{{#active}} active{{/active}}" id="block-download-certificates-tab-{{id}}"
-                   href="#block-download-certificates-pane-{{id}}" data-toggle="tab" data-bs-toggle="tab"
+                   href="#block-download-certificates-pane-{{id}}" data-bs-toggle="tab"
                    role="tab" aria-controls="block-download-certificates-pane-{{id}}"
                    aria-selected="{{#active}}true{{/active}}{{^active}}false{{/active}}">
                     <i class="fa {{icon}} me-1" aria-hidden="true"></i>{{label}}

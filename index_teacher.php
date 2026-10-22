@@ -25,7 +25,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-use block_download_certificates\local\bootstrap;
 use block_download_certificates\local\repository;
 use block_download_certificates\local\request;
 use block_download_certificates\local\scope;
@@ -57,7 +56,6 @@ $PAGE->set_url('/blocks/download_certificates/index_teacher.php');
 $PAGE->set_title(get_string('teacher_panel', 'block_download_certificates'));
 $PAGE->set_heading(get_string('teacher_panel', 'block_download_certificates'));
 $PAGE->set_pagelayout('standard');
-bootstrap::mark_page();
 
 $data = panel_page::teacher($scope, new repository());
 

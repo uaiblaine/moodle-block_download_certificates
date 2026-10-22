@@ -24,7 +24,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-use block_download_certificates\local\bootstrap;
 use block_download_certificates\local\repository;
 use block_download_certificates\local\request;
 use block_download_certificates\local\scope;
@@ -45,7 +44,6 @@ $PAGE->set_url('/blocks/download_certificates/index.php');
 $PAGE->set_title(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_heading(get_string('pluginname', 'block_download_certificates'));
 $PAGE->set_pagelayout('admin');
-bootstrap::mark_page();
 
 $data = panel_page::manager($scope, new repository());
 

@@ -11,6 +11,10 @@ The history up to upstream release 1.6.1 (version 2026100700) is in the upstream
 
 Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
+### Removed
+
+- Bootstrap 4 support: this branch runs on Moodle 5.x only.
+
 ### Added
 
 - Fleet scaffolding: CI workflow for Moodle 4.5, 5.1, 5.2 and 5.3, `.moodle-plugin-ci.yml`,
