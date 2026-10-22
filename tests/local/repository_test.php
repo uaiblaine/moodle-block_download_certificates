@@ -40,8 +40,7 @@ require_once($CFG->dirroot . '/blocks/download_certificates/tests/fixtures/issue
  * The data set lives in tool_certificate; the test class is skipped, not green, where that plugin
  * is not installed. The union of both sources is checked when mod_customcert is installed too.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

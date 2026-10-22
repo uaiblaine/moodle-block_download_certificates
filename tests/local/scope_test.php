@@ -29,8 +29,7 @@ namespace block_download_certificates\local;
  * The scope decides who sees which (owner, course) pair; can_see() runs the scope's own SQL, so
  * these tests exercise get_sql() without any certificate plugin installed.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

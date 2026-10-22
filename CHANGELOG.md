@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The history up to upstream release 1.6.1 (version 2026100700) is in the upstream repository,
 [E-learningTouch/moodle-block_download_certificates](https://github.com/E-learningTouch/moodle-block_download_certificates).
 
-## Unreleased
+## Unreleased (MOODLE_503_STABLE)
 
 Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
@@ -17,7 +17,7 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
 ### Added
 
-- Fleet scaffolding: CI workflow for Moodle 4.5, 5.1, 5.2 and 5.3, `.moodle-plugin-ci.yml`,
+- Fleet scaffolding: CI workflow (on this branch, Moodle 5.3), `.moodle-plugin-ci.yml`,
   `phpcs.xml`, `.gitattributes`, `.gitignore`, `COPYING.txt`, `CLAUDE.md`, pull request template.
 - Brazilian Portuguese language pack.
 - Privacy provider for the download task table, with tests.
@@ -48,6 +48,8 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
 ### Changed
 
+- One branch per Moodle version: this branch supports Moodle 5.3 only (version range 20261005XX,
+  switch number 2026100499, `$plugin->version` 2026100505).
 - Versions follow the per-branch ranges (`$plugin->version` 2026100500, `requires` 4.5,
   `supported` [405, 503]); README documents the switch number for sites coming from upstream.
 - The upgrade steps are replaced by one schema step that brings any upstream schema (legacy table

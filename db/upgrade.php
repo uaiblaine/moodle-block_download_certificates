@@ -26,11 +26,11 @@
 /**
  * Upgrade the plugin.
  *
- * Versions are numbered in the range of the Moodle version a branch targets (5.3: 20261005XX,
- * 5.2: 20260420XX, 5.1: 20251006XX, 4.5: 20241007XX), so a release for one Moodle version never
- * carries the number of another. Upstream releases were numbered by date up to 2026100700, above
- * those ranges: a site coming from upstream 1.6.1 sets its version to the switch number README.md
- * gives for its branch, then upgrades. The first step below therefore reads the schema, not
+ * Versions are numbered in the range of the Moodle version a branch targets (this branch, 5.3:
+ * 20261005XX), so a release for one Moodle version never carries the number of another. Upstream
+ * releases were numbered by date up to 2026100700, above that range: a site coming from upstream
+ * 1.6.1 sets its version to this branch's switch number, 2026100499 (README.md lists it), then
+ * upgrades. The first step below therefore reads the schema, not
  * $oldversion, and brings any upstream schema to the current one.
  *
  * @param int $oldversion The currently installed plugin version.

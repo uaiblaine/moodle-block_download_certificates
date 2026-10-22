@@ -38,7 +38,8 @@ Branches
 | 5.1 | `MOODLE_501_STABLE` | `20251006XX` | `2025100599` |
 | 4.5 | `MOODLE_405_STABLE` | `20241007XX` | `2024100699` |
 
-Until the split, `main` carries the code for all four versions.
+This is the 5.3 branch (`main`, equal to `MOODLE_503_STABLE`); the other versions live on the other
+`MOODLE_*_STABLE` branches.
 
 
 Installation

@@ -10,8 +10,9 @@ Plugin context: a Moodle **block** ("Download certificates") that lists certific
 table, `block_download_certificates_tasks` (background ZIP downloads, built by the adhoc task
 `generate_zip`, cleaned by the scheduled task `cleanup_expired`). Fork of
 E-learningTouch/moodle-block_download_certificates (upstream 1.6.1), diverging freely: upstream
-changes are ported by hand. Supports Moodle **4.5 through 5.3** (`$plugin->requires = 2024100700`,
-`$plugin->supported = [405, 503]`) on `main` until the split into one branch per Moodle version.
+changes are ported by hand. This checkout is the **5.3 branch** (`main`, equal to `MOODLE_503_STABLE`, `$plugin->requires = 2026100500`,
+`$plugin->supported = [503, 503]`); the other versions live on their own `MOODLE_*_STABLE` branches.
+The Bootstrap 4 polyfill lives on the 4.5 branch only.
 The plugin is mounted on no stack yet: tests run through `mdl ci` runners.
 
 The adoption is staged; the audit and the stage plan are in `docs/fleet-audit-2026-10-21.md`.
@@ -65,7 +66,7 @@ See `moodle-dev/cloud/README.md`.
 ## Owner decisions (2026-10-21)
 
 - One branch per Moodle version (`main` = 5.3, then 502/501/405); the Bootstrap 4 polyfill
-  lives on the 405 branch only, after the split.
+  lives on the 405 branch only.
 - Teachers are decided by a course capability checked in each course context plus core's group
   rules (group mode, `moodle/site:accessallgroups`, active enrolments), never by role shortnames.
 - The block lives on the dashboard, the site front page, course pages and user profiles, each
