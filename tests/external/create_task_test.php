@@ -43,8 +43,7 @@ require_once($CFG->dirroot . '/blocks/download_certificates/tests/fixtures/issue
  * The tests that queue a task skip, not pass, without tool_certificate: an empty selection is
  * refused before a row is written.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

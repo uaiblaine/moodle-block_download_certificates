@@ -31,8 +31,7 @@ use block_download_certificates\local\zip_tasks;
 /**
  * Every row the cleanup fails, expires or deletes loses its own task directory and nothing else.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test
