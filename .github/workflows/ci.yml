@@ -30,7 +30,7 @@ jobs:
   # branches that support Moodle 4.5.
   ci-405:
     name: Moodle 4.05
-    uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
+    uses: uaiblaine/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
     with:
       moodle-core-branch: MOODLE_405_STABLE
       plugin-dependencies: |
