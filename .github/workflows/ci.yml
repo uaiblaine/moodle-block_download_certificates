@@ -30,7 +30,7 @@ jobs:
   # branches that support Moodle 5.3.
   ci-503:
     name: Moodle 5.03
-    uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
+    uses: uaiblaine/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
     with:
       moodle-core-branch: MOODLE_503_STABLE
       plugin-dependencies: |
