@@ -66,9 +66,9 @@ list (PostgreSQL stops at 65535).
     actively enrolled; else every actively enrolled user (`get_enrolled_sql(..., onlyactive=true)`).
     A teacher with separate groups and no group sees nobody but themself.
   - `$courseid` keeps that course only; `$profileuserid` keeps that user only.
-  - Known limitation, for the owner to decide later: the group rule reads the course's group mode,
-    not an activity's, so a customcert activity in separate groups inside a course with no group
-    mode is not narrowed.
+  - The group rule reads the course's group mode, not a certificate activity's: certificates are
+    downloaded per course, so a customcert activity set to separate groups inside a course with no
+    group mode is not narrowed (owner decision, 2026-10-22).
 - `get_sql(string $useridcol, string $courseidcol): array` — `[$where, $params]` to AND into a query
   over the union; unique placeholder names per call (`\core\dml\...` helpers or a running counter
   with a separator — never `prefix . $n . $m`).
