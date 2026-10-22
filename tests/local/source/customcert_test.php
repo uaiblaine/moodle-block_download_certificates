@@ -40,8 +40,7 @@ require_once($CFG->dirroot . '/blocks/download_certificates/tests/fixtures/issue
  * Skipped, not green, where mod_customcert is not installed. The PDF test also proves that no
  * deprecated customcert API is called: an unexpected debugging() notice fails the test.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

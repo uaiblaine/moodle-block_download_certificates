@@ -33,8 +33,7 @@ use core_external\external_api;
  * A task's state is reported to its owner only, with the download script's address once ready
  * and a localised reason once failed.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

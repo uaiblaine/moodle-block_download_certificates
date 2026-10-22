@@ -36,8 +36,7 @@ require_once($CFG->dirroot . '/blocks/download_certificates/tests/fixtures/fake_
  * The builder names entries uniquely and survives failing issues; it runs on an in-memory source,
  * so no certificate plugin is needed.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

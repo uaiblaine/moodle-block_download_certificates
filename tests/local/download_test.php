@@ -39,8 +39,7 @@ require_once($CFG->dirroot . '/blocks/download_certificates/tests/fixtures/issue
  * Skipped, not green, where tool_certificate is not installed. The send_* methods end the request
  * and are not called here; the checks they rely on are tested in script_guards_test and request_test.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

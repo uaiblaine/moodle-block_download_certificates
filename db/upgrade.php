@@ -26,11 +26,11 @@
 /**
  * Upgrade the plugin.
  *
- * Versions are numbered in the range of the Moodle version a branch targets (5.3: 20261005XX,
- * 5.2: 20260420XX, 5.1: 20251006XX, 4.5: 20241007XX), so a release for one Moodle version never
- * carries the number of another. Upstream releases were numbered by date up to 2026100700, above
- * those ranges: a site coming from upstream 1.6.1 sets its version to the switch number README.md
- * gives for its branch, then upgrades. The first step below therefore reads the schema, not
+ * Versions are numbered in the range of the Moodle version a branch targets (this branch, 5.1:
+ * 20251006XX), so a release for one Moodle version never carries the number of another. Upstream
+ * releases were numbered by date up to 2026100700, above that range: a site coming from upstream
+ * 1.6.1 sets its version to this branch's switch number, 2025100599 (README.md lists it), then
+ * upgrades. The first step below therefore reads the schema, not
  * $oldversion, and brings any upstream schema to the current one.
  *
  * @param int $oldversion The currently installed plugin version.
@@ -41,7 +41,7 @@ function xmldb_block_download_certificates_upgrade($oldversion) {
 
     $dbman = $DB->get_manager();
 
-    if ($oldversion < 2026100500) {
+    if ($oldversion < 2025100600) {
         $table = new xmldb_table('block_download_certificates_tasks');
         $legacy = new xmldb_table('block_download_cert_tasks');
 
@@ -77,7 +77,7 @@ function xmldb_block_download_certificates_upgrade($oldversion) {
         // Upstream stored the archive path here; nothing reads it and this plugin no longer writes it.
         $DB->set_field('block_download_certificates_tasks', 'filepath', null);
 
-        upgrade_block_savepoint(true, 2026100500, 'download_certificates');
+        upgrade_block_savepoint(true, 2025100600, 'download_certificates');
     }
 
     return true;

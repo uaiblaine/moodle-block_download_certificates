@@ -31,8 +31,7 @@ use core_external\external_api;
  * The group menu lists the groups of the caller's own courses by the scope's group rule, and
  * refuses the guest and a course outside the caller's courses.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test

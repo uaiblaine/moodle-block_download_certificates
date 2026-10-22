@@ -23,8 +23,7 @@ namespace block_download_certificates\local;
  * a class or a JS module: this test scans them for Bootstrap 4 names and data-API attributes, badge
  * text colours, inline styles, and the stylesheet's selector, colour and motion rules.
  *
- * Metadata stays in docblocks because the plugin still supports Moodle 4.5, whose moodle-cs cannot
- * read attributes and warns per method.
+ * Metadata stays in docblock form so the test files stay identical across the plugin's branches.
  *
  * @package   block_download_certificates
  * @category  test

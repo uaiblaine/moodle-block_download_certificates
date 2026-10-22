@@ -35,8 +35,8 @@ use core_privacy\local\request\writer;
 /**
  * The block stores one row per ZIP download a user requested, in that user's own context.
  *
- * Attributes are not used for the metadata below because the plugin still supports Moodle 4.5,
- * whose moodle-cs cannot read them and warns per method.
+ * Attributes are not used for the metadata below: it stays in docblock form so the test files stay
+ * identical across the plugin's branches.
  *
  * @package    block_download_certificates
  * @category   test
