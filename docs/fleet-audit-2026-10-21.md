@@ -244,10 +244,10 @@ Open for the owner:
    `~/dev/moodle-dev-dlcombo` is a disposable worktree (detached, one scratch commit) combining both.
 2. Push the four branches, make `main` = `MOODLE_503_STABLE`, tag releases (`v5.3-r1` ...).
 3. Mount the plugin on stacks (`plugins.conf`, one checkout per branch) if wanted.
-4. Design questions left open: the group rule reads the course's group mode, not the certificate
-   activity's; the archive hand-over re-checks the request, not each certificate (accepted in
-   `docs/stage1-design.md`); the fleet CI template's `cancel-in-progress` cancels push runs on
-   `MOODLE_*_STABLE` (fixed here, template unchanged).
+4. Design notes: the group rule reads the course's group mode, not the certificate activity's
+   (owner decision 2026-10-22); the archive hand-over re-checks the request, not each certificate
+   (accepted in `docs/stage1-design.md`); the fleet CI template's `cancel-in-progress` cancels push
+   runs on `MOODLE_*_STABLE` (fixed here, template unchanged).
 5. On 5.3, PHPUnit reports one deprecation per test class (docblock metadata); moving to
    attributes on the 5.x branches is a later modernisation.
 
