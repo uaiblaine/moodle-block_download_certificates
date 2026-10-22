@@ -126,7 +126,9 @@ Every read of certificates: search table, counts, menus, single downloads, ZIP l
   `processing` tasks stuck for 2 hours, deletes rows 7 days old; never touches a path outside
   `block_download_certificates/tasks/` (P9).
 - The ZIP download script serves the file with `send_temp_file()` after checking owner and status,
-  and marks the task `expired`.
+  and marks the task `expired`. The hand-over re-runs the request-level check (`request::check_zip()`
+  for the owner as they are now), not each certificate: the archive was built within the scope of
+  that time and lives at most `cleanup_expired::READY_FOR`; accepted.
 
 ## Tests (PHPUnit, `tests/local/...`)
 

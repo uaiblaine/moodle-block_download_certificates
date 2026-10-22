@@ -29,7 +29,7 @@ use block_download_certificates\local\download;
 /**
  * Builds the context of `block_download_certificates/zip_form`: a POST form to one of the ZIP pages
  * with the session key in its body, marked for async_download.js, which queues the request instead
- * of posting it from {@see download::SYNC_LIMIT} certificates on and asks first when the form
+ * of posting it when it holds more than {@see download::SYNC_LIMIT} certificates and asks first when the form
  * carries a confirmation.
  *
  * @package   block_download_certificates

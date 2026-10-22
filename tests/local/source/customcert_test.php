@@ -25,6 +25,7 @@
 
 namespace block_download_certificates\local\source;
 
+use block_download_certificates\local\filter;
 use block_download_certificates\local\repository;
 use block_download_certificates\local\scope;
 
@@ -141,5 +142,33 @@ final class customcert_test extends \advanced_testcase {
         } catch (\moodle_exception $e) {
             $this->assertSame('accessdenied', $e->errorcode);
         }
+    }
+
+    /**
+     * A deleted user's customcert issue disappears from the counts, the search and the single read;
+     * an active user's issue beside it stays.
+     */
+    public function test_deleted_users_excluded(): void {
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $manager = $gen->create_user();
+        $gen->role_assign('manager', $manager->id);
+        $active = $gen->create_user();
+        $leaving = $gen->create_user();
+        $instance = issue_factory::customcert_instance((int) $course->id, 'Award');
+        $kept = issue_factory::customcert_issue((int) $instance->id, (int) $active->id, 1000, 'KEPT01');
+        $gone = issue_factory::customcert_issue((int) $instance->id, (int) $leaving->id, 1001, 'GONE01');
+        $repository = new repository(['customcert' => $this->source]);
+        $scope = scope::for_user((int) $manager->id);
+        $this->assertSame(2, $repository->count($scope, new filter()));
+        $this->assertNotNull($this->source->get_issue($gone));
+
+        delete_user(\core_user::get_user((int) $leaving->id));
+
+        $this->assertSame(1, $repository->count($scope, new filter()));
+        $rows = $repository->search($scope, new filter(), 'timecreated', 'ASC', 0, 0);
+        $this->assertSame([$kept], array_map(fn($row) => (int) $row->issueid, $rows));
+        $this->assertNull($this->source->get_issue($gone));
+        $this->assertNotNull($this->source->get_issue($kept));
     }
 }

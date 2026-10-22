@@ -68,11 +68,11 @@ final class task_storage_test extends \advanced_testcase {
      * The frozen list reads back as written, ids cast.
      */
     public function test_refs_round_trip(): void {
-        $this->assertFalse(task_storage::has_refs(201));
+        $this->assertFileDoesNotExist(task_storage::get_directory(201) . '/refs.json');
 
         task_storage::write_refs(201, [['tool_certificate', '7'], ['customcert', 8]]);
 
-        $this->assertTrue(task_storage::has_refs(201));
+        $this->assertFileExists(task_storage::get_directory(201) . '/refs.json');
         $this->assertSame([['tool_certificate', 7], ['customcert', 8]], task_storage::read_refs(201));
 
         task_storage::write_refs(202, []);
@@ -121,6 +121,29 @@ final class task_storage_test extends \advanced_testcase {
         $this->assertDirectoryDoesNotExist(task_storage::get_directory(401));
         $this->assertSame([['customcert', 2]], task_storage::read_refs(402));
         $this->assertFileExists(task_storage::get_zip_path(402));
+    }
+
+    /**
+     * A directory that resolves outside the task base, through a symbolic link at the id-derived
+     * path, is not removed, nor is what it points at; an ordinary directory beside it is.
+     */
+    public function test_delete_refuses_a_directory_outside_the_base(): void {
+        $outside = make_temp_directory('block_download_certificates/elsewhere');
+        file_put_contents($outside . '/keep.txt', 'keep');
+        make_temp_directory(task_storage::BASEDIR);
+        $link = task_storage::get_directory(601);
+        if (!@symlink($outside, $link)) {
+            $this->markTestSkipped('Symbolic links are not available.');
+        }
+        task_storage::write_refs(602, [['customcert', 1]]);
+
+        task_storage::delete(601);
+        task_storage::delete(602);
+
+        $this->assertTrue(is_link($link));
+        $this->assertFileExists($outside . '/keep.txt');
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory(602));
+        unlink($link);
     }
 
     /**

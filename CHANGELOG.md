@@ -174,6 +174,24 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
   - Polling ran on a fixed interval with no guard against overlapping requests or a limit (F20),
     `localStorage` was read and written unprotected (F21), and the ready archive's URL was built in
     JavaScript with the session key (F22).
+- Comment audit:
+  - Expiring or failing a download row deleted its files even when the row could not be locked
+    (ten seconds) and so was not written; the files now go only after the row was written.
+  - The background task, on an unexpected error, failed a row after reading its status outside the
+    lock; the status is now checked inside it, so a row the cleanup already failed keeps its reason.
+  - A background task that could not lock its row dropped the run and deleted its files; it now
+    queues the same row again and leaves the files alone.
+  - The cleanup counted rows it could not lock as failed or expired; it counts only the rows it
+    wrote and leaves the others for the next run.
+  - Exactly 30 certificates were queued as a background task although the page builds that many at
+    once; only more than 30 are queued.
+  - Closing the progress dialogue while a task ran could stop the polling for good; the banner is
+    attached before the dialogue is dropped and polling waits for a banner that is still rendering.
+  - The task directory removal now refuses a directory that resolves outside the task base, and the
+    archive path column that upstream rows hold is cleared by the upgrade, no longer written and no
+    longer exported.
+  - Removed the unused `downloadall` form action, the `instance_copy()` override, the unused
+    `task_storage::has_refs()` and a try/catch that only rethrew the same error.
 
 ### Removed
 

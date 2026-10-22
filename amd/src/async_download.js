@@ -14,7 +14,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Background ZIP downloads: a ZIP form whose selection reaches its threshold is queued as a task
+ * Background ZIP downloads: a ZIP form whose selection exceeds its threshold is queued as a task
  * instead of posted, its progress shown in a dialogue and, once the dialogue is closed or the page
  * revisited, in a banner; the ready archive is asked for by a POST into a hidden frame.
  *
@@ -184,6 +184,7 @@ const newTask = (data) => ({
     failures: 0,
     polls: 0,
     inflight: false,
+    rendering: 0,
 });
 
 /**
@@ -312,9 +313,16 @@ const showBanner = async(task) => {
     const container = document.querySelector(PAGE_SELECTOR)
         || document.getElementById('region-main')
         || document.body;
-    const {html, js} = await renderProgress(task, true);
-    const nodes = Templates.prependNodeContents(container, html, js);
-    attach(nodes.find((node) => node.nodeType === Node.ELEMENT_NODE), task);
+    // Counted while it renders: a task whose dialogue closed has no root until the banner is attached,
+    // and poll() must not read that as a task nothing shows.
+    task.rendering += 1;
+    try {
+        const {html, js} = await renderProgress(task, true);
+        const nodes = Templates.prependNodeContents(container, html, js);
+        attach(nodes.find((node) => node.nodeType === Node.ELEMENT_NODE), task);
+    } finally {
+        task.rendering -= 1;
+    }
 };
 
 /**
@@ -335,10 +343,19 @@ const showDialogue = async(task) => {
     const root = modal.getBody()[0].querySelector('[data-region="task-progress"]');
     attach(root, task);
     modal.getRoot().on(ModalEvents.hidden, () => {
-        task.roots.delete(root);
-        if (!FINISHED.includes(task.status)) {
-            showBanner(task).catch(Notification.exception);
+        if (FINISHED.includes(task.status)) {
+            task.roots.delete(root);
+            return;
         }
+        // The dialogue's root stays until the banner has its own, so the task is never without a root.
+        const release = () => task.roots.delete(root);
+        showBanner(task).then(() => {
+            release();
+            return null;
+        }).catch((error) => {
+            release();
+            Notification.exception(error);
+        });
     });
 };
 
@@ -453,9 +470,16 @@ const applyStatus = (task, status) => {
  * @returns {Promise}
  */
 const poll = async(task) => {
-    if (task.inflight || !task.roots.size) {
-        // A request in flight schedules the next one itself; a task nothing shows any more is picked
-        // up again on the next visit.
+    if (task.inflight) {
+        // A request in flight schedules the next one itself.
+        return;
+    }
+    if (!task.roots.size) {
+        // A banner still rendering will show the task: keep the schedule. A task nothing shows any
+        // more is picked up again on the next visit.
+        if (task.rendering) {
+            setTimeout(() => poll(task), POLL_DELAY);
+        }
         return;
     }
     task.inflight = true;
@@ -599,8 +623,8 @@ const onSubmit = (event) => {
     }
     const threshold = parseInt(marker.dataset.asyncThreshold, 10) || 0;
     const count = parseInt(marker.dataset.certCount, 10) || 0;
-    if (!threshold || count < threshold) {
-        // Small enough for the page to build at once.
+    if (!threshold || count <= threshold) {
+        // At most the synchronous limit: the page builds it at once.
         return;
     }
     event.preventDefault();

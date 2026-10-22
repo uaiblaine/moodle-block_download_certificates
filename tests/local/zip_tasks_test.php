@@ -59,6 +59,14 @@ final class zip_tasks_test extends \advanced_testcase {
     }
 
     /**
+     * Make every row lock available again.
+     */
+    protected function tearDown(): void {
+        zip_tasks::set_unavailable_locks([]);
+        parent::tearDown();
+    }
+
+    /**
      * Insert a task row.
      *
      * @param int $userid The owner.
@@ -287,6 +295,114 @@ final class zip_tasks_test extends \advanced_testcase {
             'status' => zip_tasks::STATUS_EXPIRED,
             'timemodified' => time(),
         ]));
+    }
+
+    /**
+     * A claim that cannot lock the row is refused and writes nothing; the same claim without the
+     * lock hands the archive over.
+     */
+    public function test_claim_is_refused_when_the_row_lock_is_not_had(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $owner = (int) $this->getDataGenerator()->create_user()->id;
+        $this->getDataGenerator()->enrol_user($owner, $course->id, 'editingteacher');
+        $ready = $this->add_task($owner, zip_tasks::STATUS_READY, (int) $course->id);
+        file_put_contents(task_storage::get_zip_path($ready), 'zip');
+
+        zip_tasks::set_unavailable_locks([$ready]);
+        $this->assertSame('tasknotready', $this->error_of(fn() => zip_tasks::claim_download($ready, $owner)));
+        $this->assertSame(zip_tasks::STATUS_READY, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $ready]));
+        zip_tasks::set_unavailable_locks([]);
+
+        [$zippath] = zip_tasks::claim_download($ready, $owner);
+        $this->assertSame(task_storage::get_zip_path($ready), $zippath);
+        $this->assertSame(zip_tasks::STATUS_EXPIRED, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $ready]));
+    }
+
+    /**
+     * A conditional write tells a lock not had (null) from a status that changed (false) and from a
+     * write (true).
+     */
+    public function test_update_if_status_tells_a_lock_not_had_from_a_changed_status(): void {
+        $owner = (int) $this->getDataGenerator()->create_user()->id;
+        $taskid = $this->add_task($owner, zip_tasks::STATUS_READY);
+        $fields = ['progress' => 1, 'timemodified' => time()];
+
+        zip_tasks::set_unavailable_locks([$taskid]);
+        $this->assertNull(zip_tasks::update_if_status($taskid, zip_tasks::STATUS_READY, $fields));
+        zip_tasks::set_unavailable_locks([]);
+
+        $this->assertFalse(zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PENDING, $fields));
+        $this->assertTrue(zip_tasks::update_if_status($taskid, zip_tasks::STATUS_READY, $fields));
+    }
+
+    /**
+     * Expiring or failing a row whose lock is not had writes nothing and keeps the directory; once
+     * the lock is free the same call writes the row and removes the directory.
+     */
+    public function test_a_lock_not_had_keeps_the_row_and_its_directory(): void {
+        global $DB;
+
+        $owner = (int) $this->getDataGenerator()->create_user()->id;
+        $cases = [
+            'expire' => [fn(int $id) => zip_tasks::expire($id), zip_tasks::STATUS_READY],
+            'fail' => [fn(int $id) => zip_tasks::fail($id, 'taskerror_timeout'), zip_tasks::STATUS_PROCESSING],
+            'fail_if_status' => [
+                fn(int $id) => zip_tasks::fail_if_status(
+                    $id,
+                    [zip_tasks::STATUS_PENDING, zip_tasks::STATUS_PROCESSING],
+                    'taskerror_timeout'
+                ),
+                zip_tasks::STATUS_PROCESSING,
+            ],
+        ];
+
+        foreach ($cases as $name => [$write, $status]) {
+            $taskid = $this->add_task($owner, $status);
+            file_put_contents(task_storage::get_zip_path($taskid), 'zip');
+
+            zip_tasks::set_unavailable_locks([$taskid]);
+            $this->assertFalse($write($taskid), $name);
+            $this->assertSame($status, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $taskid]), $name);
+            $this->assertFileExists(task_storage::get_directory($taskid) . '/certificates.zip', $name);
+            zip_tasks::set_unavailable_locks([]);
+
+            $this->assertTrue($write($taskid), $name);
+            $this->assertNotSame($status, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $taskid]), $name);
+            $this->assertDirectoryDoesNotExist(task_storage::get_directory($taskid), $name);
+        }
+    }
+
+    /**
+     * A conditional failure reads the status inside the lock: a row in another status keeps its
+     * status, its reason and its directory; a row in one of the statuses fails.
+     */
+    public function test_fail_if_status_only_fails_the_expected_statuses(): void {
+        global $DB;
+
+        $owner = (int) $this->getDataGenerator()->create_user()->id;
+        $expected = [zip_tasks::STATUS_PENDING, zip_tasks::STATUS_PROCESSING];
+        $failed = $this->add_task($owner, zip_tasks::STATUS_FAILED);
+        $DB->set_field(zip_tasks::TABLE, 'error', 'taskerror_timeout', ['id' => $failed]);
+        $ready = $this->add_task($owner, zip_tasks::STATUS_READY);
+        $processing = $this->add_task($owner, zip_tasks::STATUS_PROCESSING);
+        foreach ([$failed, $ready, $processing] as $taskid) {
+            file_put_contents(task_storage::get_zip_path($taskid), 'zip');
+        }
+
+        $this->assertFalse(zip_tasks::fail_if_status($failed, $expected, 'taskerror_noaccess'));
+        $this->assertFalse(zip_tasks::fail_if_status($ready, $expected, 'taskerror_noaccess'));
+        $this->assertSame('taskerror_timeout', $DB->get_field(zip_tasks::TABLE, 'error', ['id' => $failed]));
+        $this->assertSame(zip_tasks::STATUS_READY, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $ready]));
+        $this->assertFileExists(task_storage::get_directory($failed) . '/certificates.zip');
+        $this->assertFileExists(task_storage::get_directory($ready) . '/certificates.zip');
+
+        $this->assertTrue(zip_tasks::fail_if_status($processing, $expected, 'taskerror_noaccess'));
+        $row = $DB->get_record(zip_tasks::TABLE, ['id' => $processing]);
+        $this->assertSame(zip_tasks::STATUS_FAILED, $row->status);
+        $this->assertSame('taskerror_noaccess', $row->error);
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory($processing));
     }
 
     /**

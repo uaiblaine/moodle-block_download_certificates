@@ -83,8 +83,10 @@ class cleanup_expired extends \core\task\scheduled_task {
                 'before' => $now - self::STUCK_AFTER,
             ]
         );
+        // A row whose lock is not had in time stays as it is for the next run.
+        $failed = 0;
         foreach ($stuck as $taskid) {
-            zip_tasks::fail((int) $taskid, 'taskerror_timeout');
+            $failed += zip_tasks::fail((int) $taskid, 'taskerror_timeout') ? 1 : 0;
         }
 
         $old = $DB->get_fieldset_select(
@@ -93,8 +95,9 @@ class cleanup_expired extends \core\task\scheduled_task {
             'status = :ready AND timemodified < :before',
             ['ready' => zip_tasks::STATUS_READY, 'before' => $now - self::READY_FOR]
         );
+        $expired = 0;
         foreach ($old as $taskid) {
-            zip_tasks::expire((int) $taskid);
+            $expired += zip_tasks::expire((int) $taskid) ? 1 : 0;
         }
 
         $finished = $DB->get_fieldset_select(
@@ -113,10 +116,8 @@ class cleanup_expired extends \core\task\scheduled_task {
             $DB->delete_records($table, ['id' => $taskid]);
         }
 
-        $count = count($stuck) + count($old) + count($deleted);
-        if ($count > 0) {
-            mtrace('Certificate ZIP downloads: ' . count($stuck) . ' failed, ' . count($old) . ' expired, '
-                . count($deleted) . ' deleted.');
+        if ($failed + $expired + count($deleted) > 0) {
+            mtrace("Certificate ZIP downloads: {$failed} failed, {$expired} expired, " . count($deleted) . ' deleted.');
         }
     }
 }

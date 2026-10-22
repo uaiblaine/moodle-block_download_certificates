@@ -41,7 +41,7 @@ $PAGE->set_context(context_system::instance());
 $PAGE->set_url('/blocks/download_certificates/download.php');
 
 $scope = scope::for_user((int) $USER->id);
-if (!in_array($action, ['download_all', 'downloadall', 'download_range'], true)) {
+if (!in_array($action, ['download_all', 'download_range'], true)) {
     redirect(request::panel_url($scope));
 }
 

@@ -133,23 +133,16 @@ final class task_storage {
     }
 
     /**
-     * Whether the task's frozen list exists.
-     *
-     * @param int $taskid The id of the task row.
-     * @return bool
-     */
-    public static function has_refs(int $taskid): bool {
-        return is_file(self::get_directory($taskid) . '/' . self::REFS_FILE);
-    }
-
-    /**
      * Remove the task's directory and everything in it.
+     *
+     * A directory whose resolved path is not strictly inside the task base is left alone: a symbolic
+     * link planted at the id-derived path must not send the removal elsewhere.
      *
      * @param int $taskid The id of the task row.
      */
     public static function delete(int $taskid): void {
         $directory = self::get_directory($taskid);
-        if (is_dir($directory)) {
+        if (is_dir($directory) && self::owns_path($directory)) {
             remove_dir($directory);
         }
     }
@@ -157,7 +150,7 @@ final class task_storage {
     /**
      * Whether a path lies strictly inside the task directories, symbolic links and `..` resolved.
      *
-     * @param string $path An absolute path, typically a task row's stored file path.
+     * @param string $path An absolute path.
      * @return bool False for a path that does not exist or resolves elsewhere.
      */
     public static function owns_path(string $path): bool {

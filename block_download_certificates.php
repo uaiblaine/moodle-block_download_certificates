@@ -126,15 +126,4 @@ class block_download_certificates extends block_base {
         );
         return $this->content;
     }
-
-    /**
-     * Copy block-specific data to a new block instance: there is none, the block keeps no
-     * per-instance configuration or rows.
-     *
-     * @param int $fromid original block instance id
-     * @return boolean
-     */
-    public function instance_copy($fromid) {
-        return true;
-    }
 }

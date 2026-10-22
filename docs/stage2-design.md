@@ -50,7 +50,7 @@ with the sesskey in the body; the JavaScript submits a form to a hidden iframe.
   are `aria-live="polite"`; a monotonically increasing request id drops stale responses; no
   `innerHTML` with server data.
 - `async_download.js`: intercepts the ZIP forms marked `data-async-threshold` (the teacher's course
-  form included, F15) when the count is at or above `download::SYNC_LIMIT`; `create_task` and
+  form included, F15) when the count is above `download::SYNC_LIMIT` (exactly that many are built at once); `create_task` and
   polling `get_task_status` with a recursive `setTimeout`, one request in flight, backoff on errors
   and a cap after which it stops and says so; progress shown in a `core/modal` (`Modal.create`,
   available on 4.5) whose body is a template (`block_download_certificates/task_progress`); the

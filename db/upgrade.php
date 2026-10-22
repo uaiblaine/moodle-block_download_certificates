@@ -74,6 +74,9 @@ function xmldb_block_download_certificates_upgrade($oldversion) {
             remove_dir(make_temp_directory('block_download_certificates/async'));
         }
 
+        // Upstream stored the archive path here; nothing reads it and this plugin no longer writes it.
+        $DB->set_field('block_download_certificates_tasks', 'filepath', null);
+
         upgrade_block_savepoint(true, 2026100500, 'download_certificates');
     }
 

@@ -57,6 +57,12 @@ final class zip_tasks {
     /** @var string Downloaded or too old; the archive is gone. */
     public const STATUS_EXPIRED = 'expired';
 
+    /** @var int Seconds a status write waits for the row's lock. */
+    public const LOCK_WAIT = 10;
+
+    /** @var int[] Row ids whose lock a test declares unavailable; always empty outside PHPUnit. */
+    private static array $unavailablelocks = [];
+
     /**
      * Check a request, store it and queue its task.
      *
@@ -204,14 +210,7 @@ final class zip_tasks {
         $filter = filter::from_array(is_array($params) ? $params : []);
 
         // The archive was authorised when it was built: check the owner against what they may do now.
-        try {
-            request::check_zip(scope::for_user((int) $task->userid), (string) $task->type, $filter);
-        } catch (\moodle_exception $e) {
-            if ($e->errorcode !== 'accessdenied') {
-                throw $e;
-            }
-            throw new \moodle_exception('accessdenied', 'block_download_certificates');
-        }
+        request::check_zip(scope::for_user((int) $task->userid), (string) $task->type, $filter);
         return [$zippath, request::zip_filename((string) $task->type, $filter)];
     }
 
@@ -234,7 +233,8 @@ final class zip_tasks {
             'status' => self::STATUS_EXPIRED,
             'timemodified' => time(),
         ]);
-        if (!$claimed) {
+        // Null (the row's lock was not had in time) refuses too: nothing was claimed.
+        if ($claimed !== true) {
             throw new \moodle_exception('tasknotready', 'block_download_certificates');
         }
         return [$zippath, $filename];
@@ -252,9 +252,10 @@ final class zip_tasks {
      * @param string $expected The status the row must still have.
      * @param array $fields Column => value; the column names come from the caller's code, never
      *        from input. A `status` entry is the status the row moves to.
-     * @return bool Whether this call wrote the row.
+     * @return bool|null Whether this call wrote the row; null when the row's lock was not had in
+     *         time, which says nothing about the row's status.
      */
-    public static function update_if_status(int $taskid, string $expected, array $fields): bool {
+    public static function update_if_status(int $taskid, string $expected, array $fields): ?bool {
         global $DB;
 
         return self::with_row_lock($taskid, function () use ($DB, $taskid, $expected, $fields): bool {
@@ -270,13 +271,16 @@ final class zip_tasks {
      * Expire a row and remove its directory: an archive is handed over once.
      *
      * For a row that is gone or unusable; a download expires its row through {@see self::claim_download()}.
+     * The directory goes only when the row was written: a lock not had in time leaves both for the
+     * next caller.
      *
      * @param int $taskid The row id.
+     * @return bool Whether the row was written.
      */
-    public static function expire(int $taskid): void {
+    public static function expire(int $taskid): bool {
         global $DB;
 
-        self::with_row_lock($taskid, function () use ($DB, $taskid): bool {
+        $expired = self::with_row_lock($taskid, function () use ($DB, $taskid): bool {
             $DB->update_record(self::TABLE, (object) [
                 'id' => $taskid,
                 'status' => self::STATUS_EXPIRED,
@@ -284,19 +288,42 @@ final class zip_tasks {
             ]);
             return true;
         });
+        if ($expired !== true) {
+            return false;
+        }
         task_storage::delete($taskid);
+        return true;
     }
 
     /**
-     * Fail a row and remove its directory.
+     * Fail a row and remove its directory, whatever its status.
      *
      * @param int $taskid The row id.
      * @param string $errorcode A string identifier of this plugin.
+     * @return bool Whether the row was written; the directory goes only then.
      */
-    public static function fail(int $taskid, string $errorcode): void {
+    public static function fail(int $taskid, string $errorcode): bool {
+        return self::fail_if_status($taskid, null, $errorcode);
+    }
+
+    /**
+     * Fail a row that still has one of the given statuses, and remove its directory.
+     *
+     * The status is read under the row's lock, so a row that another writer moved on meanwhile (the
+     * cleanup failed it, a download expired it) keeps its status and reason.
+     *
+     * @param int $taskid The row id.
+     * @param array|null $expected The statuses that may be failed; null for any.
+     * @param string $errorcode A string identifier of this plugin.
+     * @return bool Whether the row was written; the directory goes only then.
+     */
+    public static function fail_if_status(int $taskid, ?array $expected, string $errorcode): bool {
         global $DB;
 
-        self::with_row_lock($taskid, function () use ($DB, $taskid, $errorcode): bool {
+        $failed = self::with_row_lock($taskid, function () use ($DB, $taskid, $expected, $errorcode): bool {
+            if ($expected !== null && !in_array($DB->get_field(self::TABLE, 'status', ['id' => $taskid]), $expected, true)) {
+                return false;
+            }
             $DB->update_record(self::TABLE, (object) [
                 'id' => $taskid,
                 'status' => self::STATUS_FAILED,
@@ -305,7 +332,29 @@ final class zip_tasks {
             ]);
             return true;
         });
+        if ($failed !== true) {
+            return false;
+        }
         task_storage::delete($taskid);
+        return true;
+    }
+
+    /**
+     * Declare the locks of some rows unavailable; for tests only.
+     *
+     * A test cannot contend with itself: core's database lock factories are re-entrant within one
+     * connection (PostgreSQL advisory locks, MariaDB GET_LOCK), so a lock the test holds is granted
+     * again to the code under test. This seam makes {@see self::with_row_lock()} answer as if another
+     * process held the row's lock.
+     *
+     * @param int[] $taskids The row ids whose lock cannot be had; an empty list restores the default.
+     * @throws \coding_exception Outside a PHPUnit run.
+     */
+    public static function set_unavailable_locks(array $taskids): void {
+        if (!defined('PHPUNIT_TEST') || !PHPUNIT_TEST) {
+            throw new \coding_exception('Row locks can only be declared unavailable in a PHPUnit run.');
+        }
+        self::$unavailablelocks = array_map('intval', $taskids);
     }
 
     /**
@@ -313,13 +362,16 @@ final class zip_tasks {
      *
      * @param int $taskid The row id.
      * @param callable $write The write; returns whether it wrote.
-     * @return bool The write's result, or false when the lock could not be had in time.
+     * @return bool|null The write's result, or null when the lock could not be had in time.
      */
-    private static function with_row_lock(int $taskid, callable $write): bool {
-        $factory = \core\lock\lock_config::get_lock_factory('block_download_certificates');
-        $lock = $factory->get_lock('task_' . $taskid, 10);
+    private static function with_row_lock(int $taskid, callable $write): ?bool {
+        $lock = false;
+        if (!in_array($taskid, self::$unavailablelocks, true)) {
+            $factory = \core\lock\lock_config::get_lock_factory('block_download_certificates');
+            $lock = $factory->get_lock('task_' . $taskid, self::LOCK_WAIT);
+        }
         if (!$lock) {
-            return false;
+            return null;
         }
         try {
             return $write();

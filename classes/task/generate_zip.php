@@ -86,10 +86,11 @@ class generate_zip extends \core\task\adhoc_task {
             $this->run_batch($task);
         } catch (\Throwable $e) {
             // A row the cleanup failed meanwhile keeps its own reason.
-            $status = $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $taskid]);
-            if (in_array($status, [zip_tasks::STATUS_PENDING, zip_tasks::STATUS_PROCESSING], true)) {
-                zip_tasks::fail($taskid, zip_tasks::error_code($e));
-            }
+            zip_tasks::fail_if_status(
+                $taskid,
+                [zip_tasks::STATUS_PENDING, zip_tasks::STATUS_PROCESSING],
+                zip_tasks::error_code($e)
+            );
             mtrace("Certificate ZIP task {$taskid} failed: " . get_class($e) . ': ' . $e->getMessage());
         }
     }
@@ -128,11 +129,9 @@ class generate_zip extends \core\task\adhoc_task {
                 'total' => count($refs),
                 'progress' => 0,
                 'batchoffset' => 0,
-                'filepath' => $zippath,
                 'timemodified' => time(),
             ]);
-            if (!$moved) {
-                $this->abandon($taskid);
+            if ($this->lost_write($taskid, $moved)) {
                 return;
             }
         }
@@ -162,13 +161,10 @@ class generate_zip extends \core\task\adhoc_task {
                 'batchoffset' => $offset,
                 'timemodified' => time(),
             ]);
-            if (!$moved) {
-                $this->abandon($taskid);
+            if ($this->lost_write($taskid, $moved)) {
                 return;
             }
-            $next = new self();
-            $next->set_custom_data((object) ['taskid' => $taskid]);
-            \core\task\manager::queue_adhoc_task($next);
+            $this->queue($taskid);
             return;
         }
 
@@ -179,12 +175,44 @@ class generate_zip extends \core\task\adhoc_task {
             'status' => zip_tasks::STATUS_READY,
             'progress' => $total,
             'batchoffset' => $total,
-            'filepath' => $zippath,
             'timemodified' => time(),
         ]);
-        if (!$moved) {
+        $this->lost_write($taskid, $moved);
+    }
+
+    /**
+     * Deal with a conditional status write that did not happen.
+     *
+     * A write that lost to another writer (the cleanup failed the row) ends the run and drops what it
+     * built. A write that never ran because the row's lock was not had in time says nothing about the
+     * row: the run is queued again for the same row, and its directory stays.
+     *
+     * @param int $taskid The row id.
+     * @param bool|null $moved The result of {@see zip_tasks::update_if_status()}.
+     * @return bool Whether the run must stop here.
+     */
+    private function lost_write(int $taskid, ?bool $moved): bool {
+        if ($moved === true) {
+            return false;
+        }
+        if ($moved === null) {
+            $this->queue($taskid);
+            mtrace("Certificate ZIP task {$taskid} could not lock its row, queued again.");
+        } else {
             $this->abandon($taskid);
         }
+        return true;
+    }
+
+    /**
+     * Queue the next run for a row.
+     *
+     * @param int $taskid The row id.
+     */
+    private function queue(int $taskid): void {
+        $next = new self();
+        $next->set_custom_data((object) ['taskid' => $taskid]);
+        \core\task\manager::queue_adhoc_task($next);
     }
 
     /**

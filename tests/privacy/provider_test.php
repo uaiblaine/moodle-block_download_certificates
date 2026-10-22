@@ -49,10 +49,10 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     private const TABLE = 'block_download_certificates_tasks';
 
     /**
-     * Insert a task row, optionally with a real file behind its filepath.
+     * Insert a task row, optionally with an upstream value in its filepath column.
      *
      * @param int $userid The requesting user.
-     * @param string $filepath The stored path.
+     * @param string $filepath The stored path, empty for a row this plugin wrote.
      * @return int The new row id.
      */
     private function add_task(int $userid, string $filepath = ''): int {
@@ -152,7 +152,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * One export per task, with formatted times and without the ZIP itself.
+     * One export per task, with formatted times and without the ZIP itself or the upstream path column.
      *
      * @return void
      */
@@ -160,7 +160,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->resetAfterTest();
         $user = $this->getDataGenerator()->create_user();
         $other = $this->getDataGenerator()->create_user();
-        $first = $this->add_task((int) $user->id);
+        $first = $this->add_task((int) $user->id, '/var/upstream/certificates.zip');
         $second = $this->add_task((int) $user->id);
         $this->add_task((int) $other->id);
         $context = \context_user::instance($user->id);
@@ -173,6 +173,8 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $one = $writer->get_data([$name, (string) $first]);
         $two = $writer->get_data([$name, (string) $second]);
         $this->assertSame('course', $one->type);
+        $this->assertArrayNotHasKey('filepath', (array) $one);
+        $this->assertArrayHasKey('error', (array) $one);
         $this->assertSame('{"courseid":2}', $one->params);
         $this->assertSame(\core_privacy\local\request\transform::datetime(1700000000), $one->timecreated);
         $this->assertSame(\core_privacy\local\request\transform::datetime(1700000100), $two->timemodified);

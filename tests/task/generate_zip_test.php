@@ -70,6 +70,14 @@ final class generate_zip_test extends \advanced_testcase {
     }
 
     /**
+     * Make every row lock available again.
+     */
+    protected function tearDown(): void {
+        zip_tasks::set_unavailable_locks([]);
+        parent::tearDown();
+    }
+
+    /**
      * Run one batch of a row, with a batch size of two, without its trace output.
      *
      * @param int $taskid The row id.
@@ -152,7 +160,7 @@ final class generate_zip_test extends \advanced_testcase {
         $this->assertSame(zip_tasks::STATUS_PROCESSING, $row->status);
         $this->assertSame(3, (int) $row->total);
         $this->assertSame(2, (int) $row->batchoffset);
-        $this->assertTrue(task_storage::has_refs($taskid));
+        $this->assertFileExists(task_storage::get_directory($taskid) . '/refs.json');
         $this->assertCount(2, \core\task\manager::get_adhoc_tasks(generate_zip::class));
 
         // Issued between the runs, and older than every frozen one: a list read again by offset
@@ -162,7 +170,7 @@ final class generate_zip_test extends \advanced_testcase {
         $row = $this->run_batch($taskid);
         $this->assertSame(zip_tasks::STATUS_READY, $row->status);
         $this->assertSame(3, (int) $row->progress);
-        $this->assertSame(task_storage::get_zip_path($taskid), $row->filepath);
+        $this->assertNull($row->filepath);
         $expected = [];
         for ($i = 1; $i <= 3; $i++) {
             $expected[] = 'tool_certificate/' . clean_filename('Ada Lovelace_Gold_CODE' . $i . '.pdf');
@@ -265,7 +273,7 @@ final class generate_zip_test extends \advanced_testcase {
         $row = $this->run_batch($taskid);
 
         $this->assertSame(zip_tasks::STATUS_EXPIRED, $row->status);
-        $this->assertFalse(task_storage::has_refs($taskid));
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory($taskid));
     }
 
     /**
@@ -364,5 +372,70 @@ final class generate_zip_test extends \advanced_testcase {
         $this->assertSame(zip_tasks::STATUS_PROCESSING, $this->run_batch($control)->status);
         $this->assertSame(zip_tasks::STATUS_READY, $this->run_batch($control)->status);
         $this->assertFileExists(task_storage::get_zip_path($control));
+    }
+
+    /**
+     * A run that cannot lock its row to move it on leaves the row and its files alone and queues the
+     * same row again; the same run with the lock free moves the row on.
+     */
+    public function test_a_lock_not_had_queues_the_row_again(): void {
+        $owner = $this->getDataGenerator()->create_user();
+        $template = issue_factory::tool_certificate_template('Gold', true)->get_id();
+        for ($i = 1; $i <= 3; $i++) {
+            issue_factory::tool_certificate_issue($template, (int) $owner->id, 0, 1000 + $i, 'CODE' . $i);
+        }
+        $manager = $this->manager();
+        $taskid = (int) zip_tasks::create(scope::for_user((int) $manager->id), 'all', new filter())->id;
+        $queued = count(\core\task\manager::get_adhoc_tasks(generate_zip::class));
+
+        zip_tasks::set_unavailable_locks([$taskid]);
+        $row = $this->run_batch($taskid);
+        zip_tasks::set_unavailable_locks([]);
+
+        $this->assertSame(zip_tasks::STATUS_PENDING, $row->status);
+        $this->assertFileExists(task_storage::get_directory($taskid) . '/refs.json');
+        $this->assertCount($queued + 1, \core\task\manager::get_adhoc_tasks(generate_zip::class));
+        $this->assertSame(
+            [$taskid],
+            array_values(array_unique(array_map(
+                fn($task) => (int) $task->get_custom_data()->taskid,
+                \core\task\manager::get_adhoc_tasks(generate_zip::class)
+            )))
+        );
+
+        // Control: with the lock free the run moves the row on and queues its next batch.
+        $row = $this->run_batch($taskid);
+        $this->assertSame(zip_tasks::STATUS_PROCESSING, $row->status);
+        $this->assertSame(2, (int) $row->batchoffset);
+        $this->assertCount($queued + 2, \core\task\manager::get_adhoc_tasks(generate_zip::class));
+    }
+
+    /**
+     * An error after the cleanup already failed the row keeps the cleanup's reason; the same error on
+     * a row that is still running takes its own reason.
+     */
+    public function test_an_error_does_not_overwrite_a_reason_the_cleanup_wrote(): void {
+        global $DB;
+
+        $manager = $this->manager();
+        $owner = $this->getDataGenerator()->create_user();
+        issue_factory::tool_certificate_issue($this->blanktemplate, (int) $owner->id, 0, 1000, 'CODE1');
+        $cleaned = (int) zip_tasks::create(scope::for_user((int) $manager->id), 'all', new filter())->id;
+        $running = (int) zip_tasks::create(scope::for_user((int) $manager->id), 'all', new filter())->id;
+
+        $row = $this->run_batch($cleaned, function () use ($DB, $cleaned): void {
+            $DB->set_field(zip_tasks::TABLE, 'status', zip_tasks::STATUS_FAILED, ['id' => $cleaned]);
+            $DB->set_field(zip_tasks::TABLE, 'error', 'taskerror_timeout', ['id' => $cleaned]);
+            throw new \RuntimeException('boom');
+        });
+        $this->assertSame(zip_tasks::STATUS_FAILED, $row->status);
+        $this->assertSame('taskerror_timeout', $row->error);
+
+        $row = $this->run_batch($running, function (): void {
+            throw new \RuntimeException('boom');
+        });
+        $this->assertSame(zip_tasks::STATUS_FAILED, $row->status);
+        $this->assertSame('taskerror_unexpected', $row->error);
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory($running));
     }
 }

@@ -108,7 +108,8 @@ class provider implements
      * Export the download requests of the approved user context.
      *
      * The generated ZIP archive is not exported: it is a temporary copy, deleted once downloaded or expired,
-     * of certificates that the certificate plugins export to their owners.
+     * of certificates that the certificate plugins export to their owners. Nor is `filepath`, an upstream
+     * column that this plugin leaves empty.
      *
      * @param approved_contextlist $contextlist The approved contexts to export for.
      * @return void
@@ -127,7 +128,6 @@ class provider implements
                     'type' => $task->type,
                     'params' => $task->params,
                     'status' => $task->status,
-                    'filepath' => $task->filepath,
                     'timecreated' => transform::datetime($task->timecreated),
                     'timemodified' => transform::datetime($task->timemodified),
                     'error' => $task->error,

@@ -54,6 +54,14 @@ final class cleanup_expired_test extends \advanced_testcase {
     }
 
     /**
+     * Make every row lock available again.
+     */
+    protected function tearDown(): void {
+        zip_tasks::set_unavailable_locks([]);
+        parent::tearDown();
+    }
+
+    /**
      * Insert a row with an archive in its task directory.
      *
      * @param string $status The status.
@@ -83,15 +91,18 @@ final class cleanup_expired_test extends \advanced_testcase {
     }
 
     /**
-     * Run the cleanup without its trace output.
+     * Run the cleanup, capturing its trace output.
+     *
+     * @return string What the cleanup printed.
      */
-    private function run_cleanup(): void {
+    private function run_cleanup(): string {
         ob_start();
         try {
             (new cleanup_expired())->execute();
         } finally {
-            ob_end_clean();
+            $output = ob_get_clean();
         }
+        return $output;
     }
 
     /**
@@ -183,5 +194,39 @@ final class cleanup_expired_test extends \advanced_testcase {
         $this->assertFalse($DB->record_exists(zip_tasks::TABLE, ['id' => $taskid]));
         $this->assertFileExists($outside);
         unlink($outside);
+    }
+
+    /**
+     * A row whose lock the cleanup cannot take keeps its status and its directory until the next
+     * run; a row beside it, unlocked, is handled at once.
+     */
+    public function test_a_locked_row_is_left_for_the_next_run(): void {
+        global $DB;
+
+        $stuckidle = cleanup_expired::STUCK_AFTER + MINSECS;
+        $old = cleanup_expired::READY_FOR + HOURSECS;
+        $stuck = $this->add_task(zip_tasks::STATUS_PROCESSING, DAYSECS, $stuckidle);
+        $stale = $this->add_task(zip_tasks::STATUS_READY, $old, $old);
+        $freestuck = $this->add_task(zip_tasks::STATUS_PROCESSING, DAYSECS, $stuckidle);
+        $freestale = $this->add_task(zip_tasks::STATUS_READY, $old, $old);
+        zip_tasks::set_unavailable_locks([$stuck, $stale]);
+
+        $output = $this->run_cleanup();
+
+        $this->assertStringContainsString('1 failed, 1 expired, 0 deleted', $output);
+        $this->assertSame(zip_tasks::STATUS_PROCESSING, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $stuck]));
+        $this->assertSame(zip_tasks::STATUS_READY, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $stale]));
+        $this->assertFileExists(task_storage::get_directory($stuck) . '/certificates.zip');
+        $this->assertFileExists(task_storage::get_directory($stale) . '/certificates.zip');
+        $this->assertSame(zip_tasks::STATUS_FAILED, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $freestuck]));
+        $this->assertSame(zip_tasks::STATUS_EXPIRED, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $freestale]));
+
+        zip_tasks::set_unavailable_locks([]);
+        $this->run_cleanup();
+
+        $this->assertSame(zip_tasks::STATUS_FAILED, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $stuck]));
+        $this->assertSame(zip_tasks::STATUS_EXPIRED, $DB->get_field(zip_tasks::TABLE, 'status', ['id' => $stale]));
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory($stuck));
+        $this->assertDirectoryDoesNotExist(task_storage::get_directory($stale));
     }
 }
