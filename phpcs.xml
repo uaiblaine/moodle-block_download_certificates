@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<ruleset name="block_download_certificates">
+    <description>PHPCS rules for block_download_certificates.</description>
+
+    <rule ref="moodle" />
+
+    <exclude-pattern>*/node_modules/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+</ruleset>

@@ -15,36 +15,43 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Adhoc task to generate a certificates ZIP file asynchronously.
- *
- * Uses a batched approach: each execution processes a limited number of
- * certificates (BATCH_SIZE) and re-schedules itself for the next batch.
- * This prevents memory exhaustion and timeout issues on large volumes.
+ * Adhoc task that builds a background certificate ZIP in batches.
  *
  * @package   block_download_certificates
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace block_download_certificates\task;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_retriever.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_query.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_packager.php');
+use block_download_certificates\local\filter;
+use block_download_certificates\local\repository;
+use block_download_certificates\local\request;
+use block_download_certificates\local\scope;
+use block_download_certificates\local\task_storage;
+use block_download_certificates\local\zip_builder;
+use block_download_certificates\local\zip_tasks;
 
 /**
- * Adhoc task that generates a ZIP archive of certificates in the background.
+ * Builds the ZIP of one task row, one batch per run, re-queuing itself until the archive is complete.
  *
- * Processes certificates in batches of BATCH_SIZE and re-schedules itself
- * for subsequent batches until all certificates have been processed.
+ * Every run derives the requester's scope again and checks the request against it: the request was
+ * authorised by a scope that may have changed since. The first run freezes the list of issues
+ * into the task directory; later runs read that list by `batchoffset`, so a certificate issued
+ * between two runs neither shifts nor duplicates a batch.
+ *
+ * @package   block_download_certificates
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class generate_zip extends \core\task\adhoc_task {
+    /** @var int Certificates added per run. */
+    public const BATCH_SIZE = 500;
 
-    /** @var int Number of certificates to process per batch. */
-    const BATCH_SIZE = 500;
+    /** @var int Progress is written every this many certificates. */
+    private const PROGRESS_STEP = 10;
 
     /**
      * Get the task name.
@@ -56,168 +63,200 @@ class generate_zip extends \core\task\adhoc_task {
     }
 
     /**
-     * Execute the task.
+     * Run one batch of the row named by the custom data; a failure fails the row, never the task.
      *
-     * Processes one batch of certificates and re-schedules itself if needed.
+     * @return void
      */
     public function execute() {
         global $DB;
 
-        // Raise memory limit for PDF generation.
-        raise_memory_limit(MEMORY_EXTRA);
-
-        $data = $this->get_custom_data();
-        $taskid = $data->taskid;
-        $offset = isset($data->offset) ? (int) $data->offset : 0;
-
-        // Fetch the task record.
-        $task = $DB->get_record('block_download_certificates_tasks', ['id' => $taskid]);
+        $taskid = (int) ($this->get_custom_data()->taskid ?? 0);
+        $task = $taskid > 0 ? $DB->get_record(zip_tasks::TABLE, ['id' => $taskid]) : false;
         if (!$task) {
-            mtrace("Task {$taskid} not found, skipping.");
+            mtrace("Certificate ZIP task {$taskid} not found, skipping.");
+            return;
+        }
+        if (!in_array($task->status, [zip_tasks::STATUS_PENDING, zip_tasks::STATUS_PROCESSING], true)) {
+            mtrace("Certificate ZIP task {$taskid} is {$task->status}, skipping.");
             return;
         }
 
-        // Skip if already completed, failed, or expired.
-        if (!in_array($task->status, ['pending', 'processing'])) {
-            mtrace("Task {$taskid} status is '{$task->status}', skipping.");
-            return;
-        }
-
-        // Update status to processing (only on first batch).
-        if ($task->status === 'pending') {
-            $DB->update_record('block_download_certificates_tasks', (object) [
-                'id' => $taskid,
-                'status' => 'processing',
-                'timemodified' => time(),
-            ]);
-        }
-
+        raise_memory_limit(MEMORY_EXTRA);
         try {
-            $retriever = new \block_download_certificates_retriever();
-            $query = new \block_download_certificates_query();
-            $packager = new \block_download_certificates_packager($retriever, $query);
-
-            $params = !empty($task->params) ? json_decode($task->params, true) : [];
-
-            // On first batch, count total certificates and save.
-            if ($offset === 0) {
-                $total = $packager->count_certificates_for_type($task->type, $params);
-                $DB->update_record('block_download_certificates_tasks', (object) [
-                    'id' => $taskid,
-                    'total' => $total,
-                    'timemodified' => time(),
-                ]);
-            } else {
-                $total = (int) $task->total;
-            }
-
-            // Get existing ZIP path (for subsequent batches).
-            $existingzippath = !empty($task->filepath) ? $task->filepath : null;
-
-            // Progress callback — update the task record every 10 certificates.
-            $lastupdate = 0;
-            $progresscallback = function ($processed) use ($DB, $taskid, &$lastupdate) {
-                if ($processed - $lastupdate >= 10 || $processed === 0) {
-                    $DB->update_record('block_download_certificates_tasks', (object) [
-                        'id' => $taskid,
-                        'progress' => $processed,
-                        'timemodified' => time(),
-                    ]);
-                    $lastupdate = $processed;
-                }
-            };
-
-            // Process one batch.
-            mtrace("Task {$taskid}: Processing batch at offset {$offset} (batch size: " . self::BATCH_SIZE . ")");
-
-            $result = $packager->generate_zip_batch(
-                $task->type,
-                $params,
-                $offset,
-                self::BATCH_SIZE,
-                $existingzippath,
-                $progresscallback
+            $this->run_batch($task);
+        } catch (\Throwable $e) {
+            // A row the cleanup failed meanwhile keeps its own reason.
+            zip_tasks::fail_if_status(
+                $taskid,
+                [zip_tasks::STATUS_PENDING, zip_tasks::STATUS_PROCESSING],
+                zip_tasks::error_code($e)
             );
-
-            $newoffset = $offset + $result['processed'];
-
-            // Log any errors from this batch.
-            if (!empty($result['errors'])) {
-                mtrace("Task {$taskid}: " . count($result['errors']) . " errors in this batch.");
-                foreach (array_slice($result['errors'], 0, 5) as $error) {
-                    mtrace("  - " . $error);
-                }
-            }
-
-            // Save the ZIP path and update progress.
-            $DB->update_record('block_download_certificates_tasks', (object) [
-                'id' => $taskid,
-                'progress' => $newoffset,
-                'filepath' => $result['zippath'],
-                'batchoffset' => $newoffset,
-                'timemodified' => time(),
-            ]);
-
-            // Check if we need to process more batches.
-            if ($newoffset < $result['total']) {
-                // Re-schedule for the next batch.
-                mtrace("Task {$taskid}: Batch complete ({$newoffset}/{$result['total']}). Scheduling next batch.");
-
-                $nexttask = new self();
-                $nexttask->set_custom_data((object) [
-                    'taskid' => $taskid,
-                    'offset' => $newoffset,
-                ]);
-                $nexttask->set_userid($this->get_userid());
-                \core\task\manager::queue_adhoc_task($nexttask);
-            } else {
-                // All batches complete — add error log if needed and finalize.
-                if (!empty($result['zippath']) && file_exists($result['zippath'])) {
-                    // Reopen ZIP to add error log if any errors accumulated.
-                    $allerrors = $this->collect_batch_errors($result);
-                    if (!empty($allerrors)) {
-                        $zip = new \ZipArchive();
-                        if ($zip->open($result['zippath']) === true) {
-                            $zip->addFromString('download_errors.txt',
-                                "Download errors:\n" . implode("\n", $allerrors));
-                            $zip->close();
-                        }
-                    }
-                }
-
-                // Mark as ready.
-                $DB->update_record('block_download_certificates_tasks', (object) [
-                    'id' => $taskid,
-                    'status' => 'ready',
-                    'progress' => $result['total'],
-                    'filepath' => $result['zippath'],
-                    'batchoffset' => $result['total'],
-                    'timemodified' => time(),
-                ]);
-
-                mtrace("Task {$taskid}: ZIP generated successfully at {$result['zippath']}");
-            }
-
-        } catch (\Exception $e) {
-            // Mark task as failed.
-            $DB->update_record('block_download_certificates_tasks', (object) [
-                'id' => $taskid,
-                'status' => 'failed',
-                'error' => $e->getMessage(),
-                'timemodified' => time(),
-            ]);
-
-            mtrace("Task {$taskid} failed: " . $e->getMessage());
+            mtrace("Certificate ZIP task {$taskid} failed: " . get_class($e) . ': ' . $e->getMessage());
         }
     }
 
     /**
-     * Collect errors from a batch result.
+     * The number of certificates one run adds.
      *
-     * @param array $result Batch result from generate_zip_batch
-     * @return array Error messages
+     * @return int
      */
-    private function collect_batch_errors($result) {
-        return !empty($result['errors']) ? $result['errors'] : [];
+    protected function get_batch_size(): int {
+        return self::BATCH_SIZE;
+    }
+
+    /**
+     * Freeze the list on the first run, then add the next batch and either re-queue or finish.
+     *
+     * @param \stdClass $task The row.
+     * @throws \moodle_exception When the request is no longer allowed, empty, or cannot be written.
+     */
+    private function run_batch(\stdClass $task): void {
+        $taskid = (int) $task->id;
+        [$scope, $filter] = $this->get_checked_request($task);
+        $repository = new repository();
+        $zippath = task_storage::get_zip_path($taskid);
+
+        $offset = (int) $task->batchoffset;
+        if ($task->status === zip_tasks::STATUS_PENDING) {
+            $refs = $repository->list_issue_refs($scope, $filter);
+            if (!$refs) {
+                throw new \moodle_exception('nocertificates', 'block_download_certificates');
+            }
+            task_storage::write_refs($taskid, $refs);
+            $offset = 0;
+            $moved = zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PENDING, [
+                'status' => zip_tasks::STATUS_PROCESSING,
+                'total' => count($refs),
+                'progress' => 0,
+                'batchoffset' => 0,
+                'timemodified' => time(),
+            ]);
+            if ($this->lost_write($taskid, $moved)) {
+                return;
+            }
+        }
+
+        $refs = task_storage::read_refs($taskid);
+        $total = count($refs);
+        $batch = array_slice($refs, $offset, max(1, $this->get_batch_size()));
+
+        $progress = static function (int $processed) use ($taskid, $offset): void {
+            if ($processed % self::PROGRESS_STEP === 0) {
+                zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PROCESSING, [
+                    'progress' => $offset + $processed,
+                    'timemodified' => time(),
+                ]);
+            }
+        };
+        // The scope is checked again for each issue: the frozen list may be older than a membership change.
+        $errors = (new zip_builder($repository->get_sources()))->build($batch, $zippath, $progress, $scope);
+        if ($errors) {
+            mtrace("Certificate ZIP task {$taskid}: " . count($errors) . ' certificates could not be added.');
+        }
+
+        $offset += count($batch);
+        if ($offset < $total) {
+            $moved = zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PROCESSING, [
+                'progress' => $offset,
+                'batchoffset' => $offset,
+                'timemodified' => time(),
+            ]);
+            if ($this->lost_write($taskid, $moved)) {
+                return;
+            }
+            $this->queue($taskid);
+            return;
+        }
+
+        if (!is_file($zippath)) {
+            throw new \moodle_exception('cannotcreatezipfile', 'block_download_certificates');
+        }
+        $moved = zip_tasks::update_if_status($taskid, zip_tasks::STATUS_PROCESSING, [
+            'status' => zip_tasks::STATUS_READY,
+            'progress' => $total,
+            'batchoffset' => $total,
+            'timemodified' => time(),
+        ]);
+        $this->lost_write($taskid, $moved);
+    }
+
+    /**
+     * Deal with a conditional status write that did not happen.
+     *
+     * A write that lost to another writer (the cleanup failed the row) ends the run and drops what it
+     * built. A write that never ran because the row's lock was not had in time says nothing about the
+     * row: the run is queued again for the same row, and its directory stays.
+     *
+     * @param int $taskid The row id.
+     * @param bool|null $moved The result of {@see zip_tasks::update_if_status()}.
+     * @return bool Whether the run must stop here.
+     */
+    private function lost_write(int $taskid, ?bool $moved): bool {
+        if ($moved === true) {
+            return false;
+        }
+        if ($moved === null) {
+            $this->queue($taskid);
+            mtrace("Certificate ZIP task {$taskid} could not lock its row, queued again.");
+        } else {
+            $this->abandon($taskid);
+        }
+        return true;
+    }
+
+    /**
+     * Queue the next run for a row.
+     *
+     * @param int $taskid The row id.
+     */
+    private function queue(int $taskid): void {
+        $next = new self();
+        $next->set_custom_data((object) ['taskid' => $taskid]);
+        \core\task\manager::queue_adhoc_task($next);
+    }
+
+    /**
+     * Stop working on a row that something else (the cleanup) moved on while this run was building.
+     *
+     * The row keeps its status and reason; what this run wrote into the task directory goes.
+     *
+     * @param int $taskid The row id.
+     */
+    private function abandon(int $taskid): void {
+        task_storage::delete($taskid);
+        mtrace("Certificate ZIP task {$taskid} changed status while it ran, dropping the run.");
+    }
+
+    /**
+     * The requester's scope as it is now, and the stored filter, after the request check.
+     *
+     * @param \stdClass $task The row.
+     * @return array [scope $scope, filter $filter]
+     * @throws \moodle_exception `taskerror_inactiveuser` for a deleted, suspended or unusable
+     *         account, `taskerror_noaccess` when the scope no longer allows the request.
+     */
+    private function get_checked_request(\stdClass $task): array {
+        $user = \core_user::get_user((int) $task->userid);
+        try {
+            if (!$user) {
+                throw new \moodle_exception('invaliduser');
+            }
+            \core_user::require_active_user($user, true, true);
+        } catch (\moodle_exception $e) {
+            throw new \moodle_exception('taskerror_inactiveuser', 'block_download_certificates');
+        }
+
+        $params = json_decode((string) $task->params, true);
+        $filter = filter::from_array(is_array($params) ? $params : []);
+        $scope = scope::for_user((int) $user->id);
+        try {
+            request::check_zip($scope, (string) $task->type, $filter);
+        } catch (\moodle_exception $e) {
+            if ($e->errorcode !== 'accessdenied') {
+                throw $e;
+            }
+            throw new \moodle_exception('taskerror_noaccess', 'block_download_certificates');
+        }
+        return [$scope, $filter];
     }
 }
