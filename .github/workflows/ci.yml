@@ -30,7 +30,7 @@ jobs:
   # branches that support Moodle 5.2.
   ci-502:
     name: Moodle 5.02
-    uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
+    uses: uaiblaine/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
     with:
       moodle-core-branch: MOODLE_502_STABLE
       plugin-dependencies: |
