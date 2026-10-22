@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="blocks/download_certificates/db" VERSION="20261007" COMMENT="XMLDB file for Moodle blocks/download_certificates">
+<XMLDB PATH="blocks/download_certificates/db" VERSION="20261021" COMMENT="XMLDB file for Moodle blocks/download_certificates">
   <TABLES>
     <TABLE NAME="block_download_certificates_tasks" COMMENT="Tracks async certificate download tasks">
       <FIELDS>
@@ -10,7 +10,7 @@
         <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending" SEQUENCE="false" COMMENT="Task status: pending, processing, ready, failed, expired"/>
         <FIELD NAME="progress" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Number of certificates processed"/>
         <FIELD NAME="total" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Total certificates to process"/>
-        <FIELD NAME="filepath" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Path to generated ZIP file"/>
+        <FIELD NAME="filepath" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Upstream column, no longer written; the upgrade clears it"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="error" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Error message if task failed"/>

@@ -1,0 +1,79 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_download_certificates/task_progress
+
+    The progress of a background ZIP download: the body of the dialogue that opens when one is
+    requested, or a banner at the top of the page. async_download.js renders it once and then
+    updates the regions below as the task moves on.
+
+    Data attributes required for JS:
+    * data-region="task-progress" - The root.
+    * data-region="message", "bar", "detail", "hint" - The parts the module updates; it also sets
+      the bar's width, which the template leaves to it.
+    * data-action="download" - Hands the ready archive over.
+    * data-action="dismiss" - Removes the banner.
+
+    Context variables required for this template:
+    * taskid - The task id; 0 while the request is being queued.
+    * banner - Whether this is a banner, which can be dismissed, rather than a dialogue body.
+    * showhint - Whether to say that the dialogue can be closed.
+    * message - The state, in words.
+    * percent - The progress, 0 to 100.
+    * progress - Certificates added so far.
+    * total - Certificates to add.
+    * ready - Whether the archive can be downloaded.
+
+    Example context (json):
+    {
+        "taskid": 12,
+        "banner": true,
+        "showhint": false,
+        "message": "Processing certificates...",
+        "percent": 40,
+        "progress": 20,
+        "total": 50,
+        "ready": false
+    }
+}}
+<div class="block-download-certificates-progress{{#banner}} alert alert-info mb-3{{/banner}}"
+     data-region="task-progress" data-taskid="{{taskid}}">
+    <div class="d-flex align-items-start">
+        <div class="flex-grow-1">
+            <p id="{{uniqid}}-task-message" class="mb-2" data-region="message" role="status">{{message}}</p>
+            <div class="progress">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" data-region="bar"
+                     aria-valuenow="{{percent}}" aria-valuemin="0" aria-valuemax="100"
+                     aria-labelledby="{{uniqid}}-task-message">{{percent}}%</div>
+            </div>
+            <p class="small text-muted mt-2 mb-0" data-region="detail">{{progress}} / {{total}}</p>
+            {{#showhint}}
+            <p class="small mt-2 mb-0" data-region="hint">{{#str}}async_can_close, block_download_certificates{{/str}}</p>
+            {{/showhint}}
+            <button type="button" class="btn btn-sm btn-success mt-2" data-action="download" {{^ready}}hidden{{/ready}}>
+                <i class="fa fa-download" aria-hidden="true"></i>
+                {{#str}}async_download, block_download_certificates{{/str}}
+            </button>
+        </div>
+        {{#banner}}
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-action="dismiss"
+                aria-label="{{#str}}dismissnotification, core{{/str}}">
+            <i class="fa fa-times" aria-hidden="true"></i>
+        </button>
+        {{/banner}}
+    </div>
+</div>

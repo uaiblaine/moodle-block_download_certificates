@@ -1,0 +1,62 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_download_certificates/page_header
+
+    The header card of the manager and teacher pages: the page's own heading, the number of
+    certificates in scope and, on the manager page, "download all".
+
+    Context variables required for this template:
+    * heading - The heading.
+    * total - The certificates in scope.
+    * totallabel - What the total counts.
+    * downloadall - A block_download_certificates/zip_form context, or false.
+
+    Example context (json):
+    {
+        "heading": "Certificate Management",
+        "total": 42,
+        "totallabel": "Total certificates",
+        "downloadall": {
+            "url": "https://example.com/blocks/download_certificates/download.php",
+            "type": "all",
+            "count": 42,
+            "threshold": 30,
+            "sesskey": "abc123",
+            "fields": [{"name": "action", "value": "download_all"}],
+            "label": "Download All Certificates",
+            "buttonclass": "btn-primary",
+            "confirm": "Are you sure you want to download all certificates?"
+        }
+    }
+}}
+<div class="card mb-4">
+    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex align-items-center">
+            <i class="fa fa-certificate fa-3x text-primary me-3" aria-hidden="true"></i>
+            <div>
+                <h2 class="mb-0">{{heading}}</h2>
+                <p class="text-muted mb-0">
+                    <strong class="block-download-certificates-number">{{total}}</strong> {{totallabel}}
+                </p>
+            </div>
+        </div>
+        {{#downloadall}}
+        {{> block_download_certificates/zip_form}}
+        {{/downloadall}}
+    </div>
+</div>

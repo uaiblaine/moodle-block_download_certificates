@@ -15,75 +15,45 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Download user's own certificates for block_download_certificates plugin.
+ * Download one user's certificates as a ZIP: the requester's own, or another user's within the scope.
  *
  * @package   block_download_certificates
- * @copyright 2015 Manieer Chhettri  (Original Idea for Moodle 2.x and 3.x)
- * @copyright 2025 E-learning Touch' contact@elearningtouch.com (Maintainer)
- * @author    Thomas Clément 222384061+ClementThomasELT@users.noreply.github.com (Coder)
- * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright 2015 Manieer Chhettri
+ * @copyright 2025 E-learning Touch <contact@elearningtouch.com>
+ * @copyright 2026 Anderson Blaine
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_download_certificates\local\download;
+use block_download_certificates\local\filter;
+use block_download_certificates\local\request;
+use block_download_certificates\local\scope;
+
 require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/controller.php');
-require_once($CFG->dirroot . '/blocks/download_certificates/classes/certificate_access.php');
 
-require_login();
+require_login(null, false);
+request::reject_guest();
+request::require_post_sesskey();
 
-// Get parameters.
 $action = required_param('action', PARAM_ALPHANUMEXT);
 $userid = optional_param('userid', 0, PARAM_INT);
 
-// Validate sesskey for security.
-require_sesskey();
+$PAGE->set_context(context_system::instance());
+$PAGE->set_url('/blocks/download_certificates/download_user.php');
 
-// Check context and permissions.
-$context = context_system::instance();
-
-$ismanager = has_capability('block/download_certificates:manage', $context);
-$access    = new block_download_certificates_access();
-$isteacher = !$ismanager && $access->is_teacher($USER->id);
-
-if ($action === 'download_my_certificates') {
-    // User downloading their own certificates.
-    require_capability('block/download_certificates:view', $context);
-    $userid = $USER->id;
-} else if ($action === 'download_user') {
-    // Téléchargement pour un utilisateur spécifique.
-    if (!$ismanager && !$isteacher) {
-        // Accès refusé si ni gestionnaire ni enseignant.
-        require_capability('block/download_certificates:manage', $context);
-    }
-    if (!$userid) {
-        throw new moodle_exception('missingparam', 'error', '', 'userid');
-    }
-    // Vérification que l'enseignant peut accéder à cet utilisateur.
-    if ($isteacher) {
-        $alluserids = $access->get_teacher_all_visible_user_ids($USER->id);
-        if (!in_array($userid, $alluserids, true)) {
-            throw new moodle_exception('accessdenied', 'block_download_certificates');
-        }
-    }
-} else {
-    throw new moodle_exception('invalidaction', 'block_download_certificates');
-}
-
+$scope = scope::for_user((int) $USER->id);
 try {
-    // Create controller instance.
-    $controller = new block_download_certificates_controller();
-
-    // Download user's certificates.
-    $controller->download_user_certificates($userid);
-
-} catch (Exception $e) {
-
-    // Show error page.
-    $PAGE->set_context($context);
-    $PAGE->set_url('/blocks/download_certificates/download_user.php');
-    $PAGE->set_title(get_string('error'));
-
-    echo $OUTPUT->header();
-    echo $OUTPUT->notification($e->getMessage(), 'error');
-    echo $OUTPUT->continue_button(new moodle_url('/my/'));
-    echo $OUTPUT->footer();
+    if ($action === 'download_my_certificates') {
+        // Own certificates are always in scope; `:view` is a block capability that the system
+        // context does not decide.
+        $userid = (int) $USER->id;
+    } else if ($action !== 'download_user') {
+        throw new moodle_exception('invalidaction', 'block_download_certificates');
+    }
+    // The scope keeps a teacher to the user's certificates in the teacher's own courses and groups.
+    $filter = filter::from_array(['userid' => $userid]);
+    request::check_zip($scope, 'user', $filter);
+    download::send_zip($scope, $filter, request::zip_filename('user', $filter));
+} catch (moodle_exception $e) {
+    request::redirect_on_error($scope, $e);
 }

@@ -1,0 +1,63 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_download_certificates/zip_form
+
+    A ZIP request: a POST form to one of the plugin's download pages, with the session key in its
+    body. Used by the block and by the pages' header.
+
+    Data attributes required for JS (async_download.js):
+    * data-download-type - The request type.
+    * data-cert-count - The certificates the request holds.
+    * data-async-threshold - From this count on, the request is queued in the background.
+    * data-confirm - The question asked before the request goes, when there is one.
+
+    Context variables required for this template:
+    * url - The download page.
+    * type, count, threshold - As the data attributes above.
+    * sesskey - The session key.
+    * fields - The hidden fields: name, value.
+    * label - The button text.
+    * buttonclass - The button's classes besides btn.
+    * confirm - The question, or false.
+
+    Example context (json):
+    {
+        "url": "https://example.com/blocks/download_certificates/download.php",
+        "type": "all",
+        "count": 42,
+        "threshold": 30,
+        "sesskey": "abc123",
+        "fields": [
+            {"name": "action", "value": "download_all"}
+        ],
+        "label": "Download all",
+        "buttonclass": "btn-success btn-sm w-100",
+        "confirm": "Are you sure you want to download all certificates?"
+    }
+}}
+<form method="post" action="{{url}}" class="block-download-certificates-zip mb-2"
+      data-download-type="{{type}}" data-cert-count="{{count}}" data-async-threshold="{{threshold}}"
+      {{#confirm}}data-confirm="{{.}}"{{/confirm}}>
+    <input type="hidden" name="sesskey" value="{{sesskey}}">
+    {{#fields}}
+    <input type="hidden" name="{{name}}" value="{{value}}">
+    {{/fields}}
+    <button type="submit" class="btn {{buttonclass}}">
+        <i class="fa fa-download me-1" aria-hidden="true"></i>{{label}}
+    </button>
+</form>
