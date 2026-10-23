@@ -68,6 +68,44 @@ final class request {
     }
 
     /**
+     * Whether the panel pages show, search and sort by the certificate owners' e-mail.
+     *
+     * E-mail is an identity field, so it follows core's rule for one,
+     * `\core_user\fields::get_identity_fields()`: it must be listed in `showuseridentity` (and, when
+     * it is in `hiddenuserfields`, the viewer needs core's capability to see hidden fields), and the
+     * viewer needs `moodle/site:viewuseridentity` in the context. A manager's scope is the site, so
+     * the system context decides; a teacher's spans several courses, so e-mail is shown only when
+     * every one of them allows it: one page cannot show the column for some rows only, and a search
+     * or sort over it would reveal the hidden addresses.
+     *
+     * Core's helper reads the current user's capabilities, so a scope of anybody else is refused.
+     *
+     * @param scope $scope Who is asking: the current user's own scope.
+     * @return bool
+     */
+    public static function email_visible(scope $scope): bool {
+        global $USER;
+
+        if ($scope->get_user_id() !== (int) $USER->id) {
+            return false;
+        }
+        if ($scope->is_manager()) {
+            $contexts = [\context_system::instance()];
+        } else {
+            $contexts = array_map(static fn(int $id) => \context_course::instance($id), $scope->get_course_ids());
+        }
+        if (!$contexts) {
+            return false;
+        }
+        foreach ($contexts as $context) {
+            if (!in_array('email', \core_user\fields::get_identity_fields($context, false), true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * The page a user returns to after a refused download.
      *
      * @param scope $scope Who is asking.
@@ -97,7 +135,8 @@ final class request {
      * One page of the certificates table, as the search web service returns it.
      *
      * Names and texts are formatted without escaping: the client escapes them once, when its
-     * template renders them.
+     * template renders them. The owners' e-mail is left empty, and neither searched nor sorted by,
+     * unless {@see self::email_visible()} allows it; `showemail` tells the template.
      *
      * @param scope $scope Who is asking.
      * @param filter $filter What to keep; it only narrows the scope.
@@ -106,7 +145,7 @@ final class request {
      * @param string $sort The sort key the client sends.
      * @param string $order `ASC` or `DESC`.
      * @param repository|null $repository The repository to read from; null for the available sources.
-     * @return array rows, total, page, perpage, pages; each row as
+     * @return array rows, total, page, perpage, pages, showemail; each row as
      *         {@see \block_download_certificates\external\search_certificates::execute_returns()}.
      */
     public static function search_page(
@@ -121,9 +160,18 @@ final class request {
         $repository = $repository ?? new repository();
         $page = max(0, $page);
         $perpage = min(max($perpage, 10), 200);
+        $sort = self::sort_key($sort);
+
+        $showemail = self::email_visible($scope);
+        if (!$showemail) {
+            $filter = $filter->without_email_search();
+            if ($sort === 'email') {
+                $sort = 'timecreated';
+            }
+        }
 
         $total = $repository->count($scope, $filter);
-        $records = $repository->search($scope, $filter, self::sort_key($sort), $order, $page * $perpage, $perpage);
+        $records = $repository->search($scope, $filter, $sort, $order, $page * $perpage, $perpage);
 
         $sources = $repository->get_sources();
         $system = \context_system::instance();
@@ -143,7 +191,7 @@ final class request {
                 'typename' => isset($sources[$row->type]) ? $sources[$row->type]->get_name() : $row->type,
                 'userid' => $row->userid,
                 'fullname' => format_string(fullname($row), true, $plain),
-                'email' => clean_param((string) $row->email, PARAM_TEXT),
+                'email' => $showemail ? clean_param((string) $row->email, PARAM_TEXT) : '',
                 'coursename' => format_string(
                     $row->coursename !== '' ? $row->coursename : $unknown,
                     true,
@@ -163,6 +211,7 @@ final class request {
             'page' => $page,
             'perpage' => $perpage,
             'pages' => (int) ceil($total / $perpage),
+            'showemail' => $showemail,
         ];
     }
 

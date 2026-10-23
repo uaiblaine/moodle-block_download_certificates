@@ -69,6 +69,13 @@ final class filter {
     public readonly string $search;
 
     /**
+     * @var bool Whether the search text is matched against the owner's e-mail too. Not stored and not
+     *      read from input: the caller decides it from core's identity fields, since matching a
+     *      column the viewer may not see would reveal it one search at a time.
+     */
+    public readonly bool $searchemail;
+
+    /**
      * Build a filter from values that are already clean.
      *
      * @param int $courseid Keep this course only.
@@ -78,6 +85,7 @@ final class filter {
      * @param int $datefrom Keep certificates issued at or after this time.
      * @param int $dateto Keep certificates issued before this time.
      * @param string $search The search text.
+     * @param bool $searchemail Whether the search text is matched against the owner's e-mail too.
      */
     public function __construct(
         int $courseid = 0,
@@ -86,7 +94,8 @@ final class filter {
         int $groupid = 0,
         int $datefrom = 0,
         int $dateto = 0,
-        string $search = ''
+        string $search = '',
+        bool $searchemail = true
     ) {
         $this->courseid = max(0, $courseid);
         $this->userid = max(0, $userid);
@@ -95,6 +104,16 @@ final class filter {
         $this->datefrom = max(0, $datefrom);
         $this->dateto = max(0, $dateto);
         $this->search = trim($search);
+        $this->searchemail = $searchemail;
+    }
+
+    /**
+     * The same filter, with the search text no longer matched against the owner's e-mail.
+     *
+     * @return self
+     */
+    public function without_email_search(): self {
+        return new self(...array_merge($this->to_array(), ['searchemail' => false]));
     }
 
     /**

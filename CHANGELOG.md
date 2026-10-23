@@ -13,6 +13,7 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
 ### Removed
 
+- The unused capability `block/download_certificates:view`, inherited from the upstream plugin and never checked in the code. Moodle drops it on upgrade; sites lose nothing, because no page or service ever read it (core's `moodle/block:view` still decides who sees the block).
 - Bootstrap 4 support: this branch runs on Moodle 5.x only.
 
 ### Added
@@ -21,6 +22,13 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
   `phpcs.xml`, `.gitattributes`, `.gitignore`, `COPYING.txt`, `CLAUDE.md`, pull request template.
 - Brazilian Portuguese language pack.
 - Privacy provider for the download task table, with tests.
+- Plugins directory guidelines: `LICENSE` (the GPL v3 text, beside `COPYING.txt`) ships in the
+  package; `tests/marketplace_readiness_test.php` pins the licence files, the English-only
+  package, data-only language files, a README naming every table and capability, plugin-scoped
+  CSS, the boilerplate and the privacy cover of core rows stamped with the component.
+- `db/uninstall.php` removes every background download directory, which hold copies of other
+  users' certificates and which core's uninstall leaves in the temporary directory.
+- README sections "Settings", "Scheduled and background tasks", "Data stored" and "Translations".
 - Stage 1a: `block/download_certificates:downloadcourse` (course context, editing and non-editing
   teachers), version 2026100501; the namespaced data layer under `classes/local/` (certificate
   sources for tool_certificate and mod_customcert, scope, filter, repository, ZIP builder,
@@ -49,12 +57,17 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 ### Changed
 
 - One branch per Moodle version: this branch supports Moodle 5.1 only (version range 20251006XX,
-  switch number 2025100599, `$plugin->version` 2025100600).
+  switch number 2025100599, `$plugin->version` 2025100601).
 - Versions follow the per-branch ranges (`$plugin->version` 2026100500, `requires` 4.5,
   `supported` [405, 503]); README documents the switch number for sites coming from upstream.
 - The upgrade steps are replaced by one schema step that brings any upstream schema (legacy table
   name, missing `batchoffset`) to the current one.
 - `block/download_certificates:manage` carries `RISK_PERSONAL`.
+- `lang/pt_br` and `lang/fr` leave the release package (`export-ignore`): the plugins directory
+  accepts English strings only, and translations reach sites through AMOS. They stay in the
+  repository.
+- README: the capabilities list names `:downloadcourse` and says that `:view` is not checked;
+  the privacy text no longer claims a stored archive path.
 - Language packs sorted, duplicate and unused strings removed, missing strings added.
 - README and CHANGELOG rewritten in English.
 - Stage 1b: every page, download script, AJAX script, both tasks and the block read certificates
@@ -94,6 +107,12 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
 ### Fixed
 
+- The certificate table showed, searched and sorted by the owners' e-mail for every manager and
+  teacher, whatever core's identity rules said. E-mail now follows
+  `core_user\fields::get_identity_fields()`: it must be listed in `showuseridentity` and the
+  viewer must hold `moodle/site:viewuseridentity` in the system context (managers) or in every
+  course of theirs (teachers); otherwise the column is left out and neither the search nor the
+  sort uses it.
 - Stage 3: "Download all" asked its confirmation through an inline `onclick` that broke on an
   apostrophe in a translation; the question is a data attribute that the background download module
   asks in a core dialogue (F13). Inline widths and `display: none` became classes and the `hidden`

@@ -374,13 +374,11 @@ class repository {
         }
         if ($filter->search !== '') {
             $like = '%' . $DB->sql_like_escape($filter->search) . '%';
-            $fields = [
-                '(' . $DB->sql_fullname('u.firstname', 'u.lastname') . ')',
-                'u.email',
-                'c.coursename',
-                'c.templatename',
-                'c.code',
-            ];
+            $fields = ['(' . $DB->sql_fullname('u.firstname', 'u.lastname') . ')'];
+            if ($filter->searchemail) {
+                $fields[] = 'u.email';
+            }
+            array_push($fields, 'c.coursename', 'c.templatename', 'c.code');
             $matches = [];
             foreach ($fields as $i => $field) {
                 $matches[] = $DB->sql_like($field, ":{$p}search{$i}", false, false);

@@ -374,6 +374,121 @@ final class request_test extends \advanced_testcase {
     }
 
     /**
+     * E-mail follows core's identity fields: a manager's page shows it while `showuseridentity`
+     * lists it and the manager may see identities site-wide; a teacher's only while every course of
+     * theirs allows it; never for a learner, nor for a scope that is not the current user's.
+     */
+    public function test_email_follows_the_identity_fields(): void {
+        global $DB;
+
+        $gen = $this->getDataGenerator();
+        $manager = $gen->create_user();
+        $gen->role_assign('manager', $manager->id);
+        $this->setUser($manager);
+        $this->assertTrue(request::email_visible(scope::for_user((int) $manager->id)));
+
+        set_config('showuseridentity', 'idnumber');
+        $this->assertFalse(request::email_visible(scope::for_user((int) $manager->id)));
+        set_config('showuseridentity', 'email');
+
+        $coursea = $gen->create_course();
+        $courseb = $gen->create_course();
+        $teacher = $this->enrolled($coursea, 'editingteacher');
+        $gen->enrol_user($teacher->id, $courseb->id, 'editingteacher');
+        $this->setUser($teacher);
+        $scope = scope::for_user((int) $teacher->id);
+        $this->assertEqualsCanonicalizing([(int) $coursea->id, (int) $courseb->id], $scope->get_course_ids());
+        $this->assertTrue(request::email_visible($scope));
+
+        // Somebody else's scope is refused, since core's helper reads the current user.
+        $this->setUser($manager);
+        $this->assertFalse(request::email_visible($scope));
+        $this->setUser($teacher);
+
+        // One course that withholds identities hides the column on the whole page.
+        $roleid = (int) $DB->get_field('role', 'id', ['shortname' => 'editingteacher']);
+        assign_capability(
+            'moodle/site:viewuseridentity',
+            CAP_PROHIBIT,
+            $roleid,
+            \context_course::instance($courseb->id)->id,
+            true
+        );
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->assertFalse(request::email_visible(scope::for_user((int) $teacher->id)));
+        $this->assertTrue(request::email_visible(scope::for_user((int) $teacher->id, (int) $coursea->id)));
+
+        // A learner opens no panel and sees no e-mail.
+        $learner = $this->enrolled($coursea, 'student');
+        $this->setUser($learner);
+        $this->assertFalse(request::email_visible(scope::for_user((int) $learner->id)));
+    }
+
+    /**
+     * Where the e-mail is hidden, the search page leaves it empty and neither matches nor sorts by
+     * it; where it is shown (the control), it does all three.
+     */
+    public function test_search_page_hides_email_where_core_does(): void {
+        if (!(new tool_certificate())->is_available()) {
+            $this->markTestSkipped('tool_certificate is not installed.');
+        }
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $teacher = $this->enrolled($course, 'editingteacher');
+        $zed = $gen->create_user(['firstname' => 'Ada', 'lastname' => 'One', 'email' => 'zed@example.com']);
+        $abe = $gen->create_user(['firstname' => 'Ada', 'lastname' => 'Two', 'email' => 'abe@example.com']);
+        $gen->enrol_user($zed->id, $course->id, 'student');
+        $gen->enrol_user($abe->id, $course->id, 'student');
+        $template = issue_factory::tool_certificate_template('Gold')->get_id();
+        issue_factory::tool_certificate_issue($template, (int) $zed->id, (int) $course->id, 1000, 'ZZZ1');
+        issue_factory::tool_certificate_issue($template, (int) $abe->id, (int) $course->id, 2000, 'AAA2');
+        $repository = new repository(['tool_certificate' => new tool_certificate()]);
+        $this->setUser($teacher);
+        $owners = static fn(array $page): array => array_column($page['rows'], 'userid');
+
+        $shown = request::search_page(scope::for_user((int) $teacher->id), new filter(), 0, 50, 'email', 'ASC', $repository);
+        $this->assertTrue($shown['showemail']);
+        $this->assertSame([(int) $abe->id, (int) $zed->id], $owners($shown));
+        $this->assertSame(['abe@example.com', 'zed@example.com'], array_column($shown['rows'], 'email'));
+        $found = request::search_page(
+            scope::for_user((int) $teacher->id),
+            new filter(search: 'zed@example'),
+            0,
+            50,
+            'timecreated',
+            'DESC',
+            $repository
+        );
+        $this->assertSame(1, $found['total']);
+
+        set_config('showuseridentity', 'idnumber');
+        $hidden = request::search_page(scope::for_user((int) $teacher->id), new filter(), 0, 50, 'email', 'ASC', $repository);
+        $this->assertFalse($hidden['showemail']);
+        $this->assertSame([(int) $zed->id, (int) $abe->id], $owners($hidden));
+        $this->assertSame(['', ''], array_column($hidden['rows'], 'email'));
+        $none = request::search_page(
+            scope::for_user((int) $teacher->id),
+            new filter(search: 'zed@example'),
+            0,
+            50,
+            'timecreated',
+            'DESC',
+            $repository
+        );
+        $this->assertSame(0, $none['total']);
+        $byname = request::search_page(
+            scope::for_user((int) $teacher->id),
+            new filter(search: 'Ada One'),
+            0,
+            50,
+            'timecreated',
+            'DESC',
+            $repository
+        );
+        $this->assertSame(1, $byname['total']);
+    }
+
+    /**
      * The ZIP pages accept a session key from a POST body only: one in the URL, a wrong one or none
      * is refused.
      */
