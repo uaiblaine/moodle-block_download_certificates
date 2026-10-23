@@ -84,9 +84,6 @@ Capabilities
   `RISK_PERSONAL`.
 - `block/download_certificates:addinstance` — add the block to a page.
 - `block/download_certificates:myaddinstance` — add the block to the dashboard.
-- `block/download_certificates:view` — declared for compatibility with the upstream plugin and not
-  checked: every logged-in user who is not the guest sees the block (core's `moodle/block:view`
-  decides block visibility) and downloads their own certificates without any capability.
 
 The certificate table shows the owners' e-mail only where core would show it: e-mail must be one
 of the identity fields (`showuseridentity`) and the viewer must hold `moodle/site:viewuseridentity`
