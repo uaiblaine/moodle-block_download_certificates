@@ -13,6 +13,7 @@ Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
 ### Removed
 
+- The unused capability `block/download_certificates:view`, inherited from the upstream plugin and never checked in the code. Moodle drops it on upgrade; sites lose nothing, because no page or service ever read it (core's `moodle/block:view` still decides who sees the block).
 - Bootstrap 4 support: this branch runs on Moodle 5.x only.
 
 ### Added

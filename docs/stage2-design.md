@@ -38,8 +38,7 @@ with the sesskey in the body; the JavaScript submits a form to a hidden iframe.
 - The ZIP pages (`download*.php`) build a ZIP: POST only, `require_sesskey()` from the body; the
   forms that call them use `method="post"` with a hidden `sesskey` input.
 - Downloading one's own certificates needs a logged-in, non-guest user and nothing else: own
-  certificates are always in scope, and `:view` is a block capability that the system context does
-  not decide (S7).
+  certificates are always in scope, and no capability is involved (the unused `:view` was removed).
 
 ## JavaScript (`amd/src/`, ES modules, no jQuery)
 
