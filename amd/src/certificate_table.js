@@ -144,6 +144,7 @@ const buildContext = (result) => {
     });
     return {
         hasrows: result.rows.length > 0,
+        showemail: result.showemail,
         emptymessage: state.search ? strings.nosearchresults : strings.nocertificates,
         columns,
         rows: result.rows,

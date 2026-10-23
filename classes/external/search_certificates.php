@@ -145,7 +145,7 @@ class search_certificates extends external_api {
                     'typename' => new external_value(PARAM_TEXT, 'Certificate source name'),
                     'userid' => new external_value(PARAM_INT, 'Owner id'),
                     'fullname' => new external_value(PARAM_TEXT, 'Owner full name, not escaped'),
-                    'email' => new external_value(PARAM_TEXT, 'Owner e-mail'),
+                    'email' => new external_value(PARAM_TEXT, 'Owner e-mail; empty when showemail is false'),
                     'coursename' => new external_value(PARAM_TEXT, 'Course name, not escaped'),
                     'templatename' => new external_value(PARAM_TEXT, 'Certificate name, not escaped'),
                     'code' => new external_value(PARAM_TEXT, 'Certificate code'),
@@ -158,6 +158,7 @@ class search_certificates extends external_api {
             'page' => new external_value(PARAM_INT, 'The page returned, from 0'),
             'perpage' => new external_value(PARAM_INT, 'Rows per page, as applied'),
             'pages' => new external_value(PARAM_INT, 'Number of pages'),
+            'showemail' => new external_value(PARAM_BOOL, 'Whether the caller may see the owners\' e-mail'),
         ]);
     }
 }

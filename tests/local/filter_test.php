@@ -74,4 +74,19 @@ final class filter_test extends \advanced_testcase {
         $filter = new filter(3, 4, 5, 6, 100, 200, 'code');
         $this->assertSame($filter->to_array(), filter::from_array($filter->to_array())->to_array());
     }
+
+    /**
+     * Turning the e-mail search off keeps every other value; the switch is never stored nor read
+     * from input, so a stored task or a request cannot set it.
+     */
+    public function test_without_email_search_keeps_the_rest(): void {
+        $filter = new filter(3, 4, 5, 6, 100, 200, 'code');
+        $this->assertTrue($filter->searchemail);
+
+        $narrowed = $filter->without_email_search();
+        $this->assertFalse($narrowed->searchemail);
+        $this->assertSame($filter->to_array(), $narrowed->to_array());
+        $this->assertArrayNotHasKey('searchemail', $narrowed->to_array());
+        $this->assertTrue(filter::from_array(['searchemail' => '0', 'search' => 'x'])->searchemail);
+    }
 }
