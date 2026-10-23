@@ -36,7 +36,7 @@ require_once($CFG->dirroot . '/blocks/download_certificates/tests/fixtures/issue
 /**
  * `download_precise.php` is a read without a session key: the scope alone decides, through
  * {@see repository::get_issue_for_download()}. `download_user.php` serves a user's own certificates
- * without the block's `:view` capability, through {@see request::check_zip()}. The ZIP pages'
+ * without any block capability, through {@see request::check_zip()}. The ZIP pages'
  * POST-only key is {@see request::require_post_sesskey()}, tested in request_test.
  *
  * The single download test skips, not passes, without tool_certificate.
@@ -112,23 +112,12 @@ final class script_guards_test extends \advanced_testcase {
     }
 
     /**
-     * A user denied the block's `:view` in the system context still downloads their own
-     * certificates, and still not another user's.
+     * A user holding no block capability downloads their own certificates, and still not another
+     * user's.
      */
-    public function test_own_certificates_need_no_view_capability(): void {
-        global $DB;
-
+    public function test_own_certificates_need_no_block_capability(): void {
         $user = (int) $this->getDataGenerator()->create_user()->id;
         $other = (int) $this->getDataGenerator()->create_user()->id;
-        assign_capability(
-            'block/download_certificates:view',
-            CAP_PROHIBIT,
-            (int) $DB->get_field('role', 'id', ['shortname' => 'user']),
-            \context_system::instance()->id,
-            true
-        );
-        accesslib_clear_all_caches_for_unit_testing();
-        $this->assertFalse(has_capability('block/download_certificates:view', \context_system::instance(), $user));
         $scope = scope::for_user($user);
 
         $this->assertNull($this->error_of(fn() => request::check_zip($scope, 'user', new filter(userid: $user))));
