@@ -68,7 +68,6 @@ $string['download_certificates:addinstance'] = 'Ajouter un nouveau bloc de tél�
 $string['download_certificates:downloadcourse'] = 'Télécharger les certificats des participants du cours';
 $string['download_certificates:manage'] = 'Gérer le téléchargement de certificats';
 $string['download_certificates:myaddinstance'] = 'Ajouter un nouveau bloc de téléchargement de certificats au tableau de bord';
-$string['download_certificates:view'] = 'Voir le bloc de téléchargement de certificats';
 $string['download_cohort_certificates'] = 'Télécharger les certificats de la cohorte';
 $string['download_course_certificates'] = 'Télécharger les certificats du cours';
 $string['download_my_certificates'] = 'Télécharger mes certificats';

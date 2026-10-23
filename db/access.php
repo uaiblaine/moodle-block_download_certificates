@@ -27,18 +27,6 @@
 defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
-    'block/download_certificates:view' => [
-        'captype' => 'read',
-        'contextlevel' => CONTEXT_BLOCK,
-        'archetypes' => [
-            'guest' => CAP_PREVENT,
-            'user' => CAP_ALLOW,
-            'student' => CAP_ALLOW,
-            'teacher' => CAP_ALLOW,
-            'editingteacher' => CAP_ALLOW,
-            'manager' => CAP_ALLOW,
-        ],
-    ],
     'block/download_certificates:manage' => [
         'riskbitmask' => RISK_PERSONAL,
         'captype' => 'write',

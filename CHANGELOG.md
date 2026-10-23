@@ -11,6 +11,10 @@ The history up to upstream release 1.6.1 (version 2026100700) is in the upstream
 
 Fleet adoption, stages 0, 1a, 1b, 2 and 3 (`docs/fleet-audit-2026-10-21.md`).
 
+### Removed
+
+- The unused capability `block/download_certificates:view`, inherited from the upstream plugin and never checked in the code. Moodle drops it on upgrade; sites lose nothing, because no page or service ever read it (core's `moodle/block:view` still decides who sees the block).
+
 ### Added
 
 - Fleet scaffolding: CI workflow (on this branch, Moodle 4.5), `.moodle-plugin-ci.yml`,
