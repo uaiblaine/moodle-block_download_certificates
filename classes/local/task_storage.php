@@ -148,6 +148,28 @@ final class task_storage {
     }
 
     /**
+     * Remove every task directory, rows or not, then the task base when it is left empty: what the
+     * plugin's uninstall removes, since core drops the table but not these temporary archives of
+     * other users' certificates.
+     *
+     * Each directory goes through {@see self::delete()}, so the same containment check applies.
+     */
+    public static function delete_all(): void {
+        global $CFG;
+
+        $base = $CFG->tempdir . '/' . self::BASEDIR;
+        if (!is_dir($base)) {
+            return;
+        }
+        foreach (scandir($base) ?: [] as $name) {
+            if (preg_match('/^[1-9][0-9]*$/', $name)) {
+                self::delete((int) $name);
+            }
+        }
+        @rmdir($base);
+    }
+
+    /**
      * Whether a path lies strictly inside the task directories, symbolic links and `..` resolved.
      *
      * @param string $path An absolute path.
