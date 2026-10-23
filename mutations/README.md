@@ -1,10 +1,11 @@
 # Mutation spec
 
 Every guard that decides who may see, request or download a certificate is paired with the test
-that must go red when the guard is removed or inverted. `gates.conf` holds 87 gates, one
+that must go red when the guard is removed or inverted. `gates.conf` holds 100 gates, one
 guard each, grouped by file: `scope.php`, the two sources, `repository.php`, `request.php`,
 `filter.php`, `zip_tasks.php`, `zip_builder.php`, `task_storage.php`, the two tasks, the privacy
-provider, the external functions and `block_content.php`. Under each gate the `#   -> ` lines name
+provider, the external functions, `block_content.php`, and the plugins directory guidelines
+(identity fields, the uninstall, the package). Under each gate the `#   -> ` lines name
 the tests written for that guard. A gate with no such line is expected to expose a missing test
 and its comment says why.
 

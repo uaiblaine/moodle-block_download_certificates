@@ -27,6 +27,7 @@
 
     Context variables required for this template:
     * hasrows - Whether the page holds rows.
+    * showemail - Whether the e-mail column is shown (core's identity fields decide).
     * emptymessage - The text shown when it holds none.
     * columns - For each sortable column (firstname, email, coursename, templatename, type,
       timecreated): ariasort (ascending, descending or none) and icon (a Font Awesome class).
@@ -37,6 +38,7 @@
     Example context (json):
     {
         "hasrows": true,
+        "showemail": true,
         "emptymessage": "No certificates found",
         "columns": {
             "firstname": {"ariasort": "none", "icon": "fa-sort"},
@@ -78,11 +80,13 @@
                         {{#str}}user, core{{/str}} <i class="fa {{columns.firstname.icon}}" aria-hidden="true"></i>
                     </button>
                 </th>
+                {{#showemail}}
                 <th scope="col" aria-sort="{{columns.email.ariasort}}">
                     <button type="button" class="btn btn-link p-0 text-reset block-download-certificates-sort" data-sort="email">
                         {{#str}}email, core{{/str}} <i class="fa {{columns.email.icon}}" aria-hidden="true"></i>
                     </button>
                 </th>
+                {{/showemail}}
                 <th scope="col" aria-sort="{{columns.coursename.ariasort}}">
                     <button type="button" class="btn btn-link p-0 text-reset block-download-certificates-sort" data-sort="coursename">
                         {{#str}}course, core{{/str}} <i class="fa {{columns.coursename.icon}}" aria-hidden="true"></i>
@@ -112,7 +116,9 @@
             {{#rows}}
             <tr class="block-download-certificates-row">
                 <td><strong>{{fullname}}</strong></td>
+                {{#showemail}}
                 <td><small class="text-muted">{{email}}</small></td>
+                {{/showemail}}
                 <td>{{coursename}}</td>
                 <td>{{templatename}}</td>
                 <td><span class="badge bg-secondary text-dark">{{typename}}</span></td>

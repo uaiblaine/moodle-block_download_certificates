@@ -178,6 +178,7 @@ final class templates_test extends \advanced_testcase {
         }
         $html['certificate_rows'] = $this->render('certificate_rows', [
             'hasrows' => !empty($result['rows']),
+            'showemail' => $result['showemail'],
             'emptymessage' => get_string('no_certificates_found', 'block_download_certificates'),
             'columns' => $columns,
             'rows' => $result['rows'],
@@ -512,6 +513,7 @@ final class templates_test extends \advanced_testcase {
         }
         $rows = $this->render('certificate_rows', [
             'hasrows' => true,
+            'showemail' => $result['showemail'],
             'emptymessage' => '',
             'columns' => $columns,
             'rows' => $result['rows'],
