@@ -69,7 +69,6 @@ $string['download_certificates:addinstance'] = 'Add a new download certificate b
 $string['download_certificates:downloadcourse'] = 'Download the certificates of course participants';
 $string['download_certificates:manage'] = 'Manage download certificate';
 $string['download_certificates:myaddinstance'] = 'Add a new download certificate block to Dashboard';
-$string['download_certificates:view'] = 'View download certificate block';
 $string['download_cohort_certificates'] = 'Download Cohort Certificates';
 $string['download_course_certificates'] = 'Download Course Certificates';
 $string['download_my_certificates'] = 'Download My Certificates';

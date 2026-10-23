@@ -27,7 +27,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'block_download_certificates';
-$plugin->version = 2025100601;
+$plugin->version = 2025100602;
 $plugin->requires = 2025100600;
 $plugin->supported = [501, 501];
 $plugin->release = 'v5.1-dev';

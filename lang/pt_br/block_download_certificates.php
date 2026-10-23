@@ -67,7 +67,6 @@ $string['download_certificates:addinstance'] = 'Adicionar um novo bloco de downl
 $string['download_certificates:downloadcourse'] = 'Baixar os certificados dos participantes do curso';
 $string['download_certificates:manage'] = 'Gerenciar o download de certificados';
 $string['download_certificates:myaddinstance'] = 'Adicionar um novo bloco de download de certificados ao Painel';
-$string['download_certificates:view'] = 'Ver o bloco de download de certificados';
 $string['download_cohort_certificates'] = 'Baixar certificados da coorte';
 $string['download_course_certificates'] = 'Baixar certificados do curso';
 $string['download_my_certificates'] = 'Baixar meus certificados';
