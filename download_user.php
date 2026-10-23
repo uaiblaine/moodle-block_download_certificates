@@ -44,8 +44,7 @@ $PAGE->set_url('/blocks/download_certificates/download_user.php');
 $scope = scope::for_user((int) $USER->id);
 try {
     if ($action === 'download_my_certificates') {
-        // Own certificates are always in scope; `:view` is a block capability that the system
-        // context does not decide.
+        // Own certificates are always in scope; no capability is involved.
         $userid = (int) $USER->id;
     } else if ($action !== 'download_user') {
         throw new moodle_exception('invalidaction', 'block_download_certificates');
